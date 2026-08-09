@@ -1,5 +1,5 @@
 /**
- * GreenShop AI — FastAPI backend wire types.
+ * Green Quant AI — FastAPI backend wire types.
  * Mirrors `backend/app/models/schemas.py` so the frontend can type-check the
  * JSON the API actually returns. Frontend UI types live in `./types`.
  */

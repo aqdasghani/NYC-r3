@@ -3,7 +3,7 @@ import { BottomCTA } from '@/components/marketing/BottomCTA';
 import { Check } from 'lucide-react';
 import Link from 'next/link';
 
-export const metadata = { title: "Pricing - GreenShop AI" };
+export const metadata = { title: "Pricing - Green Quant AI" };
 
 export default function PricingPage() {
   return (

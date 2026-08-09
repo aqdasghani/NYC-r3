@@ -3,7 +3,7 @@ import { BottomCTA } from '@/components/marketing/BottomCTA';
 import Link from 'next/link';
 import { ArrowRight, BookOpen, Video, FileText } from 'lucide-react';
 
-export const metadata = { title: "Resources - GreenShop AI" };
+export const metadata = { title: "Resources - Green Quant AI" };
 
 export default function ResourcesPage() {
   return (
@@ -82,7 +82,7 @@ export default function ResourcesPage() {
                 How FreshMart Saved ₹5M Annually
               </h3>
               <p className="text-slate-500 text-sm font-medium mb-6 flex-1 line-clamp-3">
-                A deep dive into how a 12-location grocery chain implemented GreenShop AI to revolutionize their inventory.
+                A deep dive into how a 12-location grocery chain implemented Green Quant AI to revolutionize their inventory.
               </p>
               <Link href="#" className="text-brand-green font-bold text-sm hover:underline flex items-center gap-1">
                 Read Study <ArrowRight className="w-4 h-4" />

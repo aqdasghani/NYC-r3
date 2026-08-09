@@ -31,7 +31,7 @@ export default function SignupPage() {
           <div className="w-10 h-10 rounded-xl bg-brand-green flex items-center justify-center shadow-lg shadow-brand-green/20">
             <Activity className="w-6 h-6 text-white" />
           </div>
-          <span className="text-text-primary font-extrabold text-2xl tracking-tight">GreenShop AI</span>
+          <span className="text-text-primary font-extrabold text-2xl tracking-tight">Green Quant AI</span>
         </Link>
         <h2 className="text-center text-3xl font-extrabold text-text-primary tracking-tight">
           Create your account

@@ -52,7 +52,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
         <div className={styles.logoContainer}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
           <Leaf className={styles.logoIcon} size={24} />
-          <div className={styles.logoText}>GREENSHOP.AI</div>
+          <div className={styles.logoText}>Green Quant.AI</div>
         </div>
         <div className={styles.logoSubtext}>[ SYS.READY ]</div>
         <hr className={styles.divider} />

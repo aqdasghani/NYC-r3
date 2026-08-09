@@ -33,7 +33,7 @@ export function Sidebar() {
           <Leaf className="h-5 w-5" />
         </span>
         <span className="hidden font-heading text-lg font-bold text-ink lg:inline">
-          GreenShop <span className="text-accent">AI</span>
+          Green Quant <span className="text-accent">AI</span>
         </span>
       </Link>
 

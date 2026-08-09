@@ -30,7 +30,7 @@ def register(payload: RegisterRequest, db=Depends(get_db)):
     db.commit()
     db.refresh(user)
     token = create_access_token(user_id=user.id, role=user.role, store_id=None, email=user.email)
-    return TokenResponse(access_token=token, user=UserOut.from_orm(user))
+    return TokenResponse(access_token=token, user=UserOut.model_validate(user))
 
 
 @router.post("/login")
@@ -39,9 +39,9 @@ def login(payload: LoginRequest, db=Depends(get_db)):
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     token = create_access_token(user_id=user.id, role=user.role, store_id=user.store_id, email=user.email)
-    return TokenResponse(access_token=token, user=UserOut.from_orm(user))
+    return TokenResponse(access_token=token, user=UserOut.model_validate(user))
 
 
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)):
-    return UserOut.from_orm(user)
+    return UserOut.model_validate(user)

@@ -2,7 +2,7 @@ import { MarketingLayout } from '@/components/marketing/MarketingLayout';
 import { FeaturesGrid } from '@/components/marketing/FeaturesGrid';
 import { BottomCTA } from '@/components/marketing/BottomCTA';
 
-export const metadata = { title: "Features - GreenShop AI" };
+export const metadata = { title: "Features - Green Quant AI" };
 
 export default function FeaturesPage() {
   return (
@@ -14,7 +14,7 @@ export default function FeaturesPage() {
               Everything You Need to <br/><span className="text-brand-green">Run a Smart Store</span>
             </h1>
             <p className="text-xl text-text-secondary font-medium leading-relaxed">
-              From automated expiry tracking to AI-powered dynamic pricing recommendations, discover the complete feature set of GreenShop AI.
+              From automated expiry tracking to AI-powered dynamic pricing recommendations, discover the complete feature set of Green Quant AI.
             </p>
           </div>
         </div>

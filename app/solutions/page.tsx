@@ -3,7 +3,7 @@ import { BottomCTA } from '@/components/marketing/BottomCTA';
 import { Store, Cross, ShoppingBag, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
-export const metadata = { title: "Solutions - GreenShop AI" };
+export const metadata = { title: "Solutions - Green Quant AI" };
 
 export default function SolutionsPage() {
   return (
@@ -18,7 +18,7 @@ export default function SolutionsPage() {
               Built for <span className="text-brand-green">Every Aisle</span>
             </h1>
             <p className="text-xl text-text-secondary font-medium leading-relaxed">
-              Whether you run a local pharmacy or a chain of supermarkets, GreenShop AI adapts to your unique inventory challenges.
+              Whether you run a local pharmacy or a chain of supermarkets, Green Quant AI adapts to your unique inventory challenges.
             </p>
           </div>
 

@@ -3,7 +3,7 @@ import { BottomCTA } from '@/components/marketing/BottomCTA';
 import { StatsBar } from '@/components/marketing/StatsBar';
 import { Leaf } from 'lucide-react';
 
-export const metadata = { title: "About Us - GreenShop AI" };
+export const metadata = { title: "About Us - Green Quant AI" };
 
 export default function AboutPage() {
   return (
@@ -18,7 +18,7 @@ export default function AboutPage() {
               Our Mission is to <br/><span className="text-brand-green">Eliminate Retail Waste</span>
             </h1>
             <p className="text-xl text-text-secondary font-medium leading-relaxed mb-8">
-              GreenShop AI was founded on a simple premise: technology should make it easy to do the right thing for your business and the planet. We're building the intelligence layer for modern retail to ensure perfectly balanced inventory.
+              Green Quant AI was founded on a simple premise: technology should make it easy to do the right thing for your business and the planet. We're building the intelligence layer for modern retail to ensure perfectly balanced inventory.
             </p>
           </div>
         </div>
@@ -38,7 +38,7 @@ export default function AboutPage() {
                    Every year, billions of dollars of perfectly good products are thrown away simply because they reached their expiration date before they could be sold. This isn't just a financial loss for retailers; it's an environmental catastrophe.
                  </p>
                  <p className="text-lg text-slate-600 font-medium leading-relaxed">
-                   We started GreenShop AI to bridge the gap between complex data science and the everyday reality of running a store. By predicting demand and automating pricing, we help stores sell what they buy, when they should.
+                   We started Green Quant AI to bridge the gap between complex data science and the everyday reality of running a store. By predicting demand and automating pricing, we help stores sell what they buy, when they should.
                  </p>
                </div>
                <div className="relative">

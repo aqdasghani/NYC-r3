@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "GreenShop AI | Stop Money Walking Out",
+  title: "Green Quant AI | Stop Money Walking Out",
   description: "Autonomous retail intelligence platform that prevents inventory waste before it happens.",
 };
 

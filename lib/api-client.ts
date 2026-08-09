@@ -1,5 +1,5 @@
 /**
- * GreenShop AI — FastAPI client.
+ * Green Quant AI — FastAPI client.
  *
  * Single place that talks to the backend: base URL resolution, Bearer-token
  * storage, demo auto-login, JSON/multipart fetch helpers, and the live
@@ -12,7 +12,7 @@ export const API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export const DEMO_CREDENTIALS = {
-  email: "rahul@greenshop.ai",
+  email: "rahul@Green Quant.ai",
   password: "demo1234",
 };
 
@@ -22,7 +22,7 @@ interface StoredAuth {
   user: UserOut;
 }
 
-const AUTH_KEY = "greenshop_auth";
+const AUTH_KEY = "Green Quant_auth";
 
 export class ApiError extends Error {
   status: number;

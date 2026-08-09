@@ -28,7 +28,7 @@ export function AppMockupSection() {
             </h2>
             
             <p className="text-slate-500 text-lg font-medium mt-2">
-              GreenShop AI turns your data into actions that save money and reduce waste.
+              Green Quant AI turns your data into actions that save money and reduce waste.
             </p>
             
             <ul className="flex flex-col gap-4 mt-4">
@@ -67,7 +67,7 @@ export function AppMockupSection() {
               <div className="w-full h-full bg-slate-50 rounded-[2.5rem] overflow-hidden flex flex-col relative">
                 {/* Header */}
                 <div className="pt-12 pb-6 px-5 bg-brand-green">
-                  <div className="text-white text-xl font-bold mb-1">GreenShop AI</div>
+                  <div className="text-white text-xl font-bold mb-1">Green Quant AI</div>
                   <div className="text-brand-green-light text-sm font-medium">Your Daily Briefing</div>
                 </div>
                 

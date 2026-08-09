@@ -1,5 +1,5 @@
 /**
- * GreenShop AI — typed data contract.
+ * Green Quant AI — typed data contract.
  * Every layer (server pages, client components, future FastAPI backend) shares these.
  */
 

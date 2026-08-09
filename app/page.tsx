@@ -6,7 +6,7 @@ import { AppMockupSection } from '@/components/marketing/AppMockupSection';
 import { IntegrationsBar } from '@/components/marketing/IntegrationsBar';
 import { BottomCTA } from '@/components/marketing/BottomCTA';
 
-export const metadata = { title: "GreenShop AI - Smart Retail, Zero Waste" };
+export const metadata = { title: "Green Quant AI - Smart Retail, Zero Waste" };
 
 export default function MarketingPage() {
   return (

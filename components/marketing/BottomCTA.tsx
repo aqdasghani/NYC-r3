@@ -27,7 +27,7 @@ export function BottomCTA() {
               Ready to transform your store?
             </h2>
             <p className="text-lg text-emerald-50/70 mb-10 font-medium leading-relaxed">
-              Join thousands of smart retailers who are saving more and wasting less with GreenShop AI.
+              Join thousands of smart retailers who are saving more and wasting less with Green Quant AI.
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4">

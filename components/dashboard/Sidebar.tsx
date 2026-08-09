@@ -54,7 +54,7 @@ export function Sidebar() {
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <span className="font-bold text-xl text-white tracking-tight whitespace-nowrap">GreenShop AI</span>
+                <span className="font-bold text-xl text-white tracking-tight whitespace-nowrap">Green Quant AI</span>
               </motion.div>
             )}
           </AnimatePresence>

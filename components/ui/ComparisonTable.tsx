@@ -13,7 +13,7 @@ export default function ComparisonTable() {
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', background: '#F8FAFC', borderBottom: '1px solid var(--border-default)' }}>
         <div style={{ padding: '24px', fontWeight: 600, color: 'var(--text-secondary)' }}>Feature</div>
         <div style={{ padding: '24px', fontWeight: 700, color: 'var(--text-primary)', textAlign: 'center', borderLeft: '1px solid var(--border-default)' }}>Traditional (Tally/Notebook)</div>
-        <div style={{ padding: '24px', fontWeight: 700, color: 'var(--brand-green)', textAlign: 'center', borderLeft: '1px solid var(--border-default)', background: '#F0FDF4' }}>GreenShop AI</div>
+        <div style={{ padding: '24px', fontWeight: 700, color: 'var(--brand-green)', textAlign: 'center', borderLeft: '1px solid var(--border-default)', background: '#F0FDF4' }}>Green Quant AI</div>
       </div>
 
       {[

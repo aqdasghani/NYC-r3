@@ -1,5 +1,5 @@
 /**
- * GreenShop AI — typed data-access facade.
+ * Green Quant AI — typed data-access facade.
  *
  * Components and pages ONLY import from here. Every function calls the real
  * FastAPI backend (`lib/api-client`) and falls back to the local demo dataset

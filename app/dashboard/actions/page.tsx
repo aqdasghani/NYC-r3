@@ -155,7 +155,7 @@ export default function ActionsPage() {
               </div>
               <h3 className="text-xl font-bold text-text-primary mb-2">All Caught Up!</h3>
               <p className="text-text-secondary max-w-md">
-                You have reviewed all pending AI actions. GreenShop is continuously monitoring your inventory for new optimizations.
+                You have reviewed all pending AI actions. Green Quant is continuously monitoring your inventory for new optimizations.
               </p>
             </motion.div>
           )}

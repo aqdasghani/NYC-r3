@@ -200,10 +200,10 @@ export function GlobalStateProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useGreenShop() {
+export function useGreenQuant() {
   const context = useContext(GlobalStateContext);
   if (context === undefined) {
-    throw new Error('useGreenShop must be used within a GlobalStateProvider');
+    throw new Error('useGreenQuant must be used within a GlobalStateProvider');
   }
   return context;
 }

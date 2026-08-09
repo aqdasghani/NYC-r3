@@ -26,7 +26,7 @@ export default function LoginPage() {
           <div className="w-10 h-10 rounded-xl bg-brand-green flex items-center justify-center shadow-lg shadow-brand-green/20">
             <Activity className="w-6 h-6 text-white" />
           </div>
-          <span className="text-text-primary font-extrabold text-2xl tracking-tight">GreenShop AI</span>
+          <span className="text-text-primary font-extrabold text-2xl tracking-tight">Green Quant AI</span>
         </Link>
         <h2 className="text-center text-3xl font-extrabold text-text-primary tracking-tight">
           Welcome back
@@ -60,7 +60,7 @@ export default function LoginPage() {
                   type="email"
                   autoComplete="email"
                   required
-                  defaultValue="store@greenshop.ai"
+                  defaultValue="store@Green Quant.ai"
                   className="block w-full pl-10 pr-3 py-2.5 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green transition-all"
                   placeholder="you@example.com"
                 />

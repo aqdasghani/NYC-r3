@@ -95,7 +95,7 @@ export default function ScannerPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight mb-2">Smart Receiving · Invoice OCR</h1>
           <p className="text-text-secondary">
-            Upload a supplier invoice — GreenShop extracts products, batches and expiry dates, then you confirm.
+            Upload a supplier invoice — Green Quant extracts products, batches and expiry dates, then you confirm.
           </p>
         </div>
         {stage !== "idle" && (

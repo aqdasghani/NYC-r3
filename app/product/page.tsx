@@ -3,7 +3,7 @@ import { BottomCTA } from '@/components/marketing/BottomCTA';
 import { ArrowRight, Box, Cpu, Zap, Activity } from 'lucide-react';
 import Link from 'next/link';
 
-export const metadata = { title: "Product - GreenShop AI" };
+export const metadata = { title: "Product - Green Quant AI" };
 
 export default function ProductPage() {
   return (
@@ -15,7 +15,7 @@ export default function ProductPage() {
               The Engine Behind <br/><span className="text-brand-green">Zero Waste Retail</span>
             </h1>
             <p className="text-xl text-text-secondary font-medium leading-relaxed">
-              Explore the core modules of GreenShop AI that transform your store's raw data into profitable, sustainable actions.
+              Explore the core modules of Green Quant AI that transform your store's raw data into profitable, sustainable actions.
             </p>
           </div>
 

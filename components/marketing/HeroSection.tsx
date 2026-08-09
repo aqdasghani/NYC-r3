@@ -105,7 +105,7 @@ export function HeroSection() {
                   <div className="w-8 h-8 rounded-lg bg-brand-green flex items-center justify-center shadow-glow">
                     <Activity className="w-5 h-5 text-white" />
                   </div>
-                  GreenShop AI
+                  Green Quant AI
                 </div>
                 
                 <div className="flex flex-col gap-2">

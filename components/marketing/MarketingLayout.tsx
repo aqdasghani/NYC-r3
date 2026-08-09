@@ -16,7 +16,7 @@ export function MarketingLayout({
             <div className="w-8 h-8 rounded bg-brand-green flex items-center justify-center">
               <Activity className="w-4 h-4 text-white" />
             </div>
-            <span className="text-text-primary font-bold text-xl tracking-tight">GreenShop AI</span>
+            <span className="text-text-primary font-bold text-xl tracking-tight">Green Quant AI</span>
           </Link>
           
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-text-secondary">
@@ -51,7 +51,7 @@ export function MarketingLayout({
                 <div className="w-8 h-8 rounded bg-brand-green flex items-center justify-center">
                   <Activity className="w-4 h-4 text-white" />
                 </div>
-                <span className="text-text-primary font-bold text-xl tracking-tight">GreenShop AI</span>
+                <span className="text-text-primary font-bold text-xl tracking-tight">Green Quant AI</span>
               </Link>
               <p className="text-text-secondary text-sm font-medium leading-relaxed mb-6">
                 Smart Retail. Zero Waste.
@@ -88,7 +88,7 @@ export function MarketingLayout({
           </div>
           
           <div className="pt-8 border-t border-slate-200 text-center md:flex justify-between items-center text-sm text-text-tertiary font-medium">
-            <div>&copy; {new Date().getFullYear()} GreenShop AI. All rights reserved.</div>
+            <div>&copy; {new Date().getFullYear()} Green Quant AI. All rights reserved.</div>
             <div className="flex gap-6 mt-4 md:mt-0">
                <Link href="#" className="hover:text-brand-green">Privacy Policy</Link>
                <Link href="#" className="hover:text-brand-green">Terms of Service</Link>

@@ -30,7 +30,7 @@ export const useActionStore = create<ActionState>()(
         })),
     }),
     {
-      name: "greenshop-executed-actions",
+      name: "Green Quant-executed-actions",
       storage: createJSONStorage(() => localStorage),
     }
   )
