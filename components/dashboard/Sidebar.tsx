@@ -16,16 +16,16 @@ const navItems = [
   { name: 'Products',       path: '/dashboard/products',    icon: PackageSearch },
   { name: 'Inventory',      path: '/dashboard/inventory',   icon: Package },
   { name: 'Sales & POS',    path: '/dashboard/sales',       icon: TrendingUp },
-  { name: 'Purchases',      path: '/dashboard/purchases',   icon: ShoppingCart },
+  { name: 'Procurement',    path: '/dashboard/procurement', icon: ShoppingCart },
   { name: 'Suppliers',      path: '/dashboard/suppliers',   icon: Users },
   { name: 'Transfers',      path: '/dashboard/transfers',   icon: ArrowRightLeft },
   { name: 'Returns',        path: '/dashboard/returns',     icon: CornerDownLeft },
-  { name: 'AI Intelligence',path: '/dashboard/ai-intelligence', icon: Zap },
+  { name: 'Daily Briefing', path: '/dashboard/briefing',    icon: Zap },
   { name: 'Reports',        path: '/dashboard/reports',     icon: FileText },
   { name: 'Sustainability', path: '/dashboard/sustainability', icon: Leaf },
   { name: 'Alerts',         path: '/dashboard/alerts',      icon: Bell, badge: 5 },
   { name: 'WhatsApp Hub',   path: '/dashboard/whatsapp',    icon: MessageCircle },
-  { name: 'Settings',       path: '/settings',              icon: Settings },
+  { name: 'Settings',       path: '/dashboard/settings',    icon: Settings },
 ];
 
 export function Sidebar() {

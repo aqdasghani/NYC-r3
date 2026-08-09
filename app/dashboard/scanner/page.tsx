@@ -1,16 +1,20 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Camera, ScanLine, CheckCircle2, AlertTriangle, Upload, RotateCcw, FileText } from "lucide-react";
-import { confirmReceipt, scanInvoice } from "@/lib/api";
-import type { ExtractedItem, ScanInvoiceResponse } from "@/lib/backend-types";
+import { Camera, ScanLine, CheckCircle2, AlertTriangle, Upload, RotateCcw, FileText, QrCode, Search, PackagePlus } from "lucide-react";
+import { confirmReceipt, scanInvoice, getProductByBarcode, getProducts } from "@/lib/api";
+import { BarcodeScanner } from "@/components/scanner/BarcodeScanner";
+import type { ExtractedItem, ScanInvoiceResponse, ProductOut } from "@/lib/backend-types";
 import { formatINR } from "@/lib/utils";
 
 type Stage = "idle" | "scanning" | "preview" | "done";
+type Tab = "invoice" | "barcode" | "manual";
 
 export default function ScannerPage() {
   const inputRef = useRef<HTMLInputElement>(null);
+  
+  // Invoice OCR State
   const [stage, setStage] = useState<Stage>("idle");
   const [result, setResult] = useState<ScanInvoiceResponse | null>(null);
   const [included, setIncluded] = useState<Set<number>>(new Set());
@@ -18,7 +22,29 @@ export default function ScannerPage() {
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
+  
+  // Global Tab State
+  const [activeTab, setActiveTab] = useState<Tab>("invoice");
+  
+  // Barcode / Manual State
+  const [scannedProduct, setScannedProduct] = useState<ProductOut | null>(null);
+  const [isSearchingBarcode, setIsSearchingBarcode] = useState(false);
+  const [manualProducts, setManualProducts] = useState<ProductOut[]>([]);
+  
+  // Manual Entry Form State
+  const [selectedProductId, setSelectedProductId] = useState<string>("");
+  const [manualQty, setManualQty] = useState<number>(1);
+  const [manualPrice, setManualPrice] = useState<number>(0);
+  const [manualExpiry, setManualExpiry] = useState<string>("");
+  const [manualBatch, setManualBatch] = useState<string>("");
 
+  useEffect(() => {
+    if (activeTab === "manual" && manualProducts.length === 0) {
+      getProducts().then(setManualProducts).catch(console.error);
+    }
+  }, [activeTab, manualProducts.length]);
+
+  // --- Invoice Functions ---
   const handleFile = async (file: File | null) => {
     if (!file) return;
     setFileName(file.name);
@@ -77,6 +103,59 @@ export default function ScannerPage() {
     }
   };
 
+  // --- Barcode / Manual Receiving Functions ---
+  const handleBarcodeScan = async (code: string) => {
+    setIsSearchingBarcode(true);
+    setError(null);
+    try {
+      const prod = await getProductByBarcode(code);
+      setScannedProduct(prod);
+      // Pre-fill manual form with product defaults
+      setSelectedProductId(prod.id);
+      setManualPrice(prod.purchase_price || 0);
+    } catch (err) {
+      setError(`No product found for barcode: ${code}`);
+    } finally {
+      setIsSearchingBarcode(false);
+    }
+  };
+
+  const handleManualReceive = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProductId) return;
+    
+    setConfirming(true);
+    setError(null);
+    try {
+      const payload = [{
+        product_id: selectedProductId,
+        quantity: manualQty,
+        purchase_price: manualPrice || undefined,
+        expiry_date: manualExpiry || new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+        batch_number: manualBatch || undefined,
+      }];
+      
+      const res = await confirmReceipt(payload);
+      setSummary(`Added batch successfully. AI Queued ${res.detection_summary.recommendations_created} actions.`);
+      
+      // reset form
+      if (activeTab === "manual") {
+        setSelectedProductId("");
+      } else {
+        setScannedProduct(null);
+      }
+      setManualQty(1);
+      setManualPrice(0);
+      setManualExpiry("");
+      setManualBatch("");
+      setStage("done");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not receive product");
+    } finally {
+      setConfirming(false);
+    }
+  };
+
   const reset = () => {
     setStage("idle");
     setResult(null);
@@ -84,6 +163,7 @@ export default function ScannerPage() {
     setFileName(null);
     setError(null);
     setSummary(null);
+    setScannedProduct(null);
     if (inputRef.current) inputRef.current.value = "";
   };
 
@@ -93,12 +173,12 @@ export default function ScannerPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight mb-2">Smart Receiving · Invoice OCR</h1>
+          <h1 className="text-3xl font-bold tracking-tight mb-2">Smart Receiving</h1>
           <p className="text-text-secondary">
-            Upload a supplier invoice — Green Quant extracts products, batches and expiry dates, then you confirm.
+            Process invoices, scan barcodes, or enter stock manually.
           </p>
         </div>
-        {stage !== "idle" && (
+        {(stage !== "idle" || scannedProduct) && (
           <button
             onClick={reset}
             className="flex items-center gap-2 glass-panel px-4 py-2 rounded-lg text-sm font-medium hover:bg-bg-surface/80 transition-colors"
@@ -113,7 +193,32 @@ export default function ScannerPage() {
           <AlertTriangle className="w-4 h-4 shrink-0" /> {error}
         </div>
       )}
+      
+      {summary && stage === "done" && (
+        <div className="glass-panel border border-brand-green/20 bg-brand-green/5 px-4 py-3 text-sm text-brand-green flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 shrink-0" /> {summary}
+        </div>
+      )}
 
+      {/* Tabs */}
+      <div className="flex items-center gap-2 border-b border-border-default pb-2">
+        {(["invoice", "barcode", "manual"] as Tab[]).map((t) => (
+          <button
+            key={t}
+            onClick={() => { setActiveTab(t); reset(); }}
+            className={`px-4 py-2 text-sm font-semibold transition-colors border-b-2 -mb-[9px] ${
+              activeTab === t ? "text-brand-green border-brand-green" : "text-text-secondary border-transparent hover:text-text-primary"
+            }`}
+          >
+            {t === "invoice" && "Invoice OCR"}
+            {t === "barcode" && "Barcode Scanner"}
+            {t === "manual" && "Manual Entry"}
+          </button>
+        ))}
+      </div>
+
+      {/* --- INVOICE TAB --- */}
+      {activeTab === "invoice" && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Upload / scanning area */}
         <div className="glass-panel p-4 flex flex-col items-center justify-center min-h-[420px] relative overflow-hidden bg-slate-50 rounded-2xl">
@@ -132,7 +237,7 @@ export default function ScannerPage() {
                   <Camera className="w-8 h-8 text-text-muted" />
                 </div>
                 <p className="text-text-secondary mb-2">Upload an invoice image or PDF.</p>
-                <p className="text-xs text-text-muted mb-6">OCR + LLM extraction runs on the backend.</p>
+                <p className="text-xs text-text-muted mb-6">Powered by Gemini 2.5 Flash API.</p>
                 <button
                   onClick={() => inputRef.current?.click()}
                   className="bg-brand-green text-black px-6 py-3 rounded-lg font-semibold hover:bg-brand-green/90 transition-colors shadow-[0_0_20px_rgba(34,197,94,0.4)] flex items-center gap-2 mx-auto"
@@ -162,7 +267,7 @@ export default function ScannerPage() {
                   <CheckCircle2 className="w-8 h-8 text-brand-green" />
                 </div>
                 <h3 className="text-xl font-bold text-text-primary mb-2">Receipt Confirmed!</h3>
-                <p className="text-text-secondary text-sm max-w-sm">{summary}</p>
+                <p className="text-text-secondary text-sm max-w-sm">Products added to inventory</p>
               </motion.div>
             )}
           </AnimatePresence>
@@ -237,7 +342,7 @@ export default function ScannerPage() {
               <h4 className="font-bold text-text-primary mb-2">How it works</h4>
               <ul className="space-y-2 list-disc pl-5">
                 <li>Upload a supplier invoice photo or PDF.</li>
-                <li>Google Vision / LLM OCR extracts line items, quantities and prices.</li>
+                <li>Gemini AI extracts line items, quantities and prices.</li>
                 <li>Items are matched to your catalogue by fuzzy name matching.</li>
                 <li>Confirm to create inventory batches (FEFO) and queue AI actions.</li>
               </ul>
@@ -245,6 +350,126 @@ export default function ScannerPage() {
           )}
         </div>
       </div>
+      )}
+
+      {/* --- BARCODE TAB --- */}
+      {activeTab === "barcode" && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="glass-panel p-4 flex flex-col items-center justify-center min-h-[420px] bg-slate-50 rounded-2xl relative">
+            <h3 className="font-bold text-text-primary mb-4 flex items-center gap-2">
+              <QrCode className="w-5 h-5 text-brand-green" /> Scan Barcode / QR
+            </h3>
+            {isSearchingBarcode ? (
+              <div className="text-brand-green flex flex-col items-center">
+                 <ScanLine className="w-8 h-8 animate-spin" />
+                 <p className="mt-2 font-semibold">Looking up product...</p>
+              </div>
+            ) : (
+              <BarcodeScanner onScan={handleBarcodeScan} />
+            )}
+          </div>
+          <div className="space-y-4">
+            {scannedProduct ? (
+              <form onSubmit={handleManualReceive} className="glass-panel p-6 space-y-4">
+                <h3 className="text-xl font-bold text-text-primary mb-2">Receive Stock</h3>
+                <div className="p-4 bg-brand-green/5 border border-brand-green/20 rounded-lg text-sm mb-4">
+                  <p className="font-semibold text-brand-green">{scannedProduct.name}</p>
+                  <p className="text-text-secondary">Code: {scannedProduct.barcode}</p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Quantity</label>
+                    <input type="number" value={manualQty} onChange={(e) => setManualQty(Number(e.target.value))} required min={1} className="w-full px-3 py-2 border rounded-md" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Purchase Price</label>
+                    <input type="number" step="0.01" value={manualPrice} onChange={(e) => setManualPrice(Number(e.target.value))} required className="w-full px-3 py-2 border rounded-md" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Batch Number (Optional)</label>
+                  <input type="text" value={manualBatch} onChange={(e) => setManualBatch(e.target.value)} className="w-full px-3 py-2 border rounded-md" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Expiry Date (YYYY-MM-DD)</label>
+                  <input type="date" value={manualExpiry} onChange={(e) => setManualExpiry(e.target.value)} required className="w-full px-3 py-2 border rounded-md" />
+                </div>
+                
+                <button type="submit" disabled={confirming} className="w-full bg-brand-green text-black px-4 py-2 rounded-lg font-bold">
+                  {confirming ? "Saving..." : "Add to Inventory"}
+                </button>
+              </form>
+            ) : (
+              <div className="glass-panel p-6 text-sm text-text-secondary leading-relaxed">
+                <h4 className="font-bold text-text-primary mb-2">How it works</h4>
+                <ul className="space-y-2 list-disc pl-5">
+                  <li>Allow camera access when prompted.</li>
+                  <li>Point your camera at a product barcode or QR code.</li>
+                  <li>GreenShop will instantly look up the product in your catalogue.</li>
+                  <li>You can quickly add received stock or check product details.</li>
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* --- MANUAL ENTRY TAB --- */}
+      {activeTab === "manual" && (
+        <div className="max-w-2xl mx-auto glass-panel p-6 rounded-2xl space-y-6">
+          <div className="flex items-center gap-2 mb-4">
+            <PackagePlus className="w-6 h-6 text-brand-green" />
+            <h2 className="text-xl font-bold text-text-primary">Manual Stock Entry</h2>
+          </div>
+          <form onSubmit={handleManualReceive} className="space-y-5">
+            <div>
+              <label className="block text-sm font-medium mb-1 text-text-primary">Product</label>
+              <select 
+                value={selectedProductId} 
+                onChange={(e) => {
+                  setSelectedProductId(e.target.value);
+                  const prod = manualProducts.find((p) => p.id === e.target.value);
+                  if (prod) setManualPrice(prod.purchase_price || 0);
+                }}
+                required 
+                className="w-full px-3 py-2 border border-border-default rounded-md bg-white text-text-primary"
+              >
+                <option value="">Select a product...</option>
+                {manualProducts.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1 text-text-primary">Quantity</label>
+                <input type="number" value={manualQty} onChange={(e) => setManualQty(Number(e.target.value))} required min={1} className="w-full px-3 py-2 border border-border-default rounded-md" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 text-text-primary">Purchase Price (₹)</label>
+                <input type="number" step="0.01" value={manualPrice} onChange={(e) => setManualPrice(Number(e.target.value))} required className="w-full px-3 py-2 border border-border-default rounded-md" />
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1 text-text-primary">Batch Number</label>
+              <input type="text" placeholder="e.g. BATCH-2234" value={manualBatch} onChange={(e) => setManualBatch(e.target.value)} className="w-full px-3 py-2 border border-border-default rounded-md" />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1 text-text-primary">Expiry Date</label>
+              <input type="date" value={manualExpiry} onChange={(e) => setManualExpiry(e.target.value)} required className="w-full px-3 py-2 border border-border-default rounded-md" />
+            </div>
+
+            <button type="submit" disabled={confirming || !selectedProductId} className="w-full bg-brand-green text-black px-4 py-3 rounded-lg font-bold hover:bg-brand-green/90 transition-colors disabled:opacity-50">
+              {confirming ? "Saving..." : "Confirm & Add to Inventory"}
+            </button>
+          </form>
+        </div>
+      )}
+
     </div>
   );
 }

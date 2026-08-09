@@ -1,83 +1,117 @@
-"""Invoice OCR pipeline with Google Vision, local Tesseract, and deterministic fallback."""
+"""Invoice OCR pipeline with Google Gemini Flash."""
 from __future__ import annotations
 
+import base64
 import difflib
-import io
-import re
+import json
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
+from typing import Optional
 
 from ..config import settings
 from ..models.database import Product
-from ..utils.expiry_parser import parse_invoice_lines
-
-MOCK_INVOICE = """INVOICE #GS-DEMO-2284
-Amul Butter 500g, QTY 20, MRP 50, BATCH B2284, EXP 11/08/2026
-Britannia Good Day 250g, QTY 48, MRP 30, BATCH BG771, BEST BEFORE 6 MONTHS
-Parle-G Biscuits 800g, QTY 36, PRICE 72, LOT PG2026, EXP 30/09/2026
-"""
 
 
 @dataclass
 class OcrResult:
     raw_text: str
     source: str
-
-
-def _tesseract_available() -> bool:
-    try:
-        import pytesseract
-        pytesseract.get_tesseract_version()
-        return True
-    except Exception:
-        return False
+    parsed_items: list[dict] = None
 
 
 def extract_invoice_text(image_bytes: bytes) -> OcrResult:
-    if settings.GOOGLE_VISION_API_KEY:
+    """Use Gemini to extract structured JSON from the invoice image."""
+    parsed_items = []
+    text = ""
+    source = "mock_parser"
+
+    if settings.GEMINI_API_KEY:
         try:
-            import base64
             import httpx
-            response = httpx.post(
-                "https://vision.googleapis.com/v1/images:annotate",
-                params={"key": settings.GOOGLE_VISION_API_KEY},
-                json={"requests": [{"image": {"content": base64.b64encode(image_bytes).decode()}, "features": [{"type": "DOCUMENT_TEXT_DETECTION"}]}]},
-                timeout=8,
-            )
-            response.raise_for_status()
-            text = response.json().get("responses", [{}])[0].get("fullTextAnnotation", {}).get("text", "")
+            b64_data = base64.b64encode(image_bytes).decode("utf-8")
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={settings.GEMINI_API_KEY}"
+            
+            payload = {
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [
+                            {"text": "Extract the line items from this invoice. For each item, return product_name, quantity, price, batch_number, and expiry_date if available. Also extract vendor_name, invoice_date, invoice_number, total_amount, tax_amount. Format as JSON."},
+                            {
+                                "inlineData": {
+                                    "data": b64_data,
+                                    "mimeType": "image/jpeg"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                "generationConfig": {
+                    "responseMimeType": "application/json"
+                }
+            }
+
+            resp = httpx.post(url, json=payload, timeout=20)
+            resp.raise_for_status()
+            result_json = resp.json()
+            
+            text = result_json.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "{}")
             if text:
-                return OcrResult(text, "google_vision")
-        except Exception:
-            pass
-    if image_bytes and _tesseract_available():
-        try:
-            import pytesseract
-            from PIL import Image, ImageEnhance, ImageOps
-            image = Image.open(io.BytesIO(image_bytes)).convert("L")
-            image = ImageOps.autocontrast(image.resize((image.width * 2, image.height * 2)))
-            image = ImageEnhance.Contrast(image).enhance(1.5)
-            text = pytesseract.image_to_string(image)
-            if text.strip():
-                return OcrResult(text, "tesseract")
-        except Exception:
-            pass
-    return OcrResult(MOCK_INVOICE, "mock_parser")
+                source = "gemini"
+                try:
+                    data = json.loads(text)
+                    items = data.get("items") or data.get("extracted_items") or []
+                    for item in items:
+                        # Ensure fields match our internal expectations
+                        parsed_items.append({
+                            "line_text": item.get("line_text") or f"{item.get('product_name', '')} {item.get('quantity', '')} {item.get('price', '')}",
+                            "product_name": item.get("product_name", "Unknown Product"),
+                            "quantity": int(item.get("quantity") or 1),
+                            "price": float(item.get("price") or 0.0),
+                            "batch_number": str(item.get("batch_number", "")) if item.get("batch_number") else None,
+                            "expiry_date": item.get("expiry_date"),  # Usually YYYY-MM-DD
+                        })
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f"Gemini OCR Failed: {e}")
+
+    # Fallback to dummy data if Gemini fails or is not configured
+    if not parsed_items:
+        source = "mock"
+        text = "MOCK INVOICE TEXT"
+        parsed_items = [
+            {
+                "line_text": "Amul Butter 500g 20 50.00",
+                "product_name": "Amul Butter 500g",
+                "quantity": 20,
+                "price": 50.0,
+                "batch_number": "B2284",
+                "expiry_date": "2026-08-11"
+            }
+        ]
+
+    return OcrResult(raw_text=text, source=source, parsed_items=parsed_items)
 
 
-def parse_invoice(raw_text: str, products: list[Product] | None = None) -> list[dict]:
+def parse_invoice(ocr_result: OcrResult, products: list[Product] | None = None) -> list[dict]:
     products = products or []
     parsed = []
-    for item in parse_invoice_lines(raw_text):
+    
+    items = ocr_result.parsed_items or []
+    
+    for item in items:
         best = None
         confidence = 0.0
+        # Fuzzy match product name
         for product in products:
             score = difflib.SequenceMatcher(None, item["product_name"].lower(), product.name.lower()).ratio()
             if score > confidence:
                 confidence, best = score, product
+        
         parsed.append({
             **item,
-            "matched_product_id": best.id if best and confidence >= 0.45 else None,
+            "matched_product_id": best.id if best and confidence >= 0.40 else None,
             "confidence": round(confidence, 3),
         })
     return parsed

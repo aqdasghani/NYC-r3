@@ -525,6 +525,10 @@ export async function getProducts(search?: string): Promise<ProductOut[]> {
   }, () => []);
 }
 
+export async function getProductByBarcode(code: string): Promise<ProductOut> {
+  return apiFetch<ProductOut>(`/api/inventory/barcode/${code}`);
+}
+
 /** All inventory batches (used by POS to compute per-product stock). */
 export async function getBatches(): Promise<import("./backend-types").BatchOut[]> {
   return liveOr(() => apiFetch<import("./backend-types").BatchOut[]>("/api/inventory/batches"), () => []);
@@ -632,7 +636,7 @@ export async function generateActions(): Promise<{
 export async function scanInvoice(file: File): Promise<ScanInvoiceResponse> {
   const form = new FormData();
   form.append("file", file);
-  return apiUpload<ScanInvoiceResponse>("/api/receiving/scan-invoice", form);
+  return await apiUpload<ScanInvoiceResponse>("/api/receiving/scan-invoice", form);
 }
 
 export async function confirmReceipt(
@@ -644,7 +648,7 @@ export async function confirmReceipt(
     batch_number?: string;
   }>
 ): Promise<ConfirmReceiptResponse> {
-  return apiFetch<ConfirmReceiptResponse>("/api/receiving/confirm", {
+  return await apiFetch<ConfirmReceiptResponse>("/api/receiving/confirm", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ items }),

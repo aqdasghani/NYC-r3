@@ -19,7 +19,7 @@ async def scan_invoice(file: UploadFile = File(...), user: User = Depends(get_ow
     data = await file.read()
     ocr = extract_invoice_text(data)
     products = db.scalars(select(Product).where(Product.store_id == user.store_id)).all()
-    parsed = parse_invoice(ocr.raw_text, products)
+    parsed = parse_invoice(ocr, products)
     return ScanInvoiceResponse(source=ocr.source, raw_text=ocr.raw_text, extracted_items=[ExtractedItem.model_validate(item) for item in parsed])
 
 @router.post("/confirm", response_model=ConfirmReceiptResponse)

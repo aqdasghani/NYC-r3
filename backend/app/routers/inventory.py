@@ -64,6 +64,14 @@ def get_product(product_id: uuid.UUID, user: User = Depends(get_current_user), d
     return ProductDetailOut.model_validate(result)
 
 
+@router.get("/barcode/{code}", response_model=ProductOut)
+def get_product_by_barcode(code: str, user: User = Depends(get_current_user), db=Depends(get_db)):
+    store_id = _store(user)
+    product = db.scalar(select(Product).where(Product.barcode == code, Product.store_id == store_id))
+    if not product: raise HTTPException(404, f"No product found for barcode {code}")
+    return product
+
+
 @router.patch("/products/{product_id}", response_model=ProductOut)
 def update_product(product_id: uuid.UUID, payload: ProductUpdate, user: User = Depends(get_owner_manager), db=Depends(get_db)):
     product = db.scalar(select(Product).where(Product.id == product_id, Product.store_id == _store(user)))
