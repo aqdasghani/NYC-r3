@@ -65,7 +65,7 @@ export function AiPriorities({ priorities }: { priorities: Risk[] }) {
           </span>
         </div>
         <Link
-          href="/actions"
+          href="/dashboard/actions"
           className={cn(
             "shrink-0 text-xs font-medium text-accent transition-colors hover:text-accent/80"
           )}

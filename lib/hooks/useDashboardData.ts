@@ -46,14 +46,20 @@ export function useDashboardData(): DashboardState {
       const online = await pingBackend();
       if (cancelled) return;
       setOffline(!online);
-      const [summaryRes, dataRes] = await Promise.all([
-        getDashboardSummary(),
-        getDashboardData(),
-      ]);
-      if (cancelled) return;
-      setSummary(summaryRes);
-      setData(dataRes);
-      setLoading(false);
+      try {
+        // Fetch the aggregate once and reuse it — getDashboardData accepts the
+        // summary to avoid a second hit on the heavy /api/analytics/dashboard.
+        const summaryRes = await getDashboardSummary();
+        if (cancelled) return;
+        const dataRes = await getDashboardData(summaryRes);
+        if (cancelled) return;
+        setSummary(summaryRes);
+        setData(dataRes);
+      } catch (e) {
+        console.error("Failed to load dashboard", e);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
     return () => {
       cancelled = true;

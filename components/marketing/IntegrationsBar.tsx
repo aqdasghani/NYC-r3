@@ -17,14 +17,14 @@ export function IntegrationsBar() {
     <section className="py-12 border-y border-border-default bg-bg-surface backdrop-blur-sm overflow-hidden">
       <div className="container mx-auto px-6 max-w-7xl flex flex-col md:flex-row items-center gap-8">
         <div className="text-text-secondary font-medium text-sm whitespace-nowrap">
-          Works seamlessly with
+          Ecosystem Integrations <span className="text-xs text-brand-green font-bold ml-1">(Roadmap / Coming Soon)</span>
         </div>
         
-        {/* Simple Marquee implementation using CSS animation or just flex wrap for now */}
-        <div className="flex flex-wrap md:flex-nowrap justify-center md:justify-between items-center w-full gap-8 opacity-60 grayscale hover:grayscale-0 transition-all duration-500">
+        <div className="flex flex-wrap md:flex-nowrap justify-center md:justify-between items-center w-full gap-6 opacity-70">
           {integrations.map((name, i) => (
-            <div key={i} className="text-xl font-bold text-text-primary tracking-tight flex items-center gap-2">
-              <span className="text-brand-green-light/50">/</span> {name}
+            <div key={i} className="text-sm font-semibold text-text-primary tracking-tight flex items-center gap-1.5 bg-slate-100 px-3 py-1.5 rounded-md border border-slate-200">
+              <span>{name}</span>
+              <span className="text-[10px] text-slate-500 font-normal">Coming Soon</span>
             </div>
           ))}
         </div>

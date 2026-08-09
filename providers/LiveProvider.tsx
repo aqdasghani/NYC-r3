@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { dashboardWsUrl, ensureAuth } from "@/lib/api-client";
+import { dashboardWsUrl, isAuthenticated } from "@/lib/api-client";
 import { emitLive, type LiveEvent } from "@/lib/live";
 
 const RECONNECT_DELAY_MS = 4000;
@@ -20,7 +20,7 @@ export function LiveProvider({ children }: { children: React.ReactNode }) {
 
     const connect = async () => {
       if (disposed) return;
-      const authed = await ensureAuth();
+      const authed = isAuthenticated();
       if (disposed || !authed) {
         scheduleReconnect();
         return;

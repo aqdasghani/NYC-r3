@@ -1,38 +1,63 @@
+"""Store catalogue — real stores a user can see and transfer stock between.
+
+The SaaS is single-tenant-per-store, but an OWNER can own multiple stores
+(``stores.owner_id``). This endpoint returns real destinations so the transfers
+UI never fabricates branches that don't exist in the database.
+"""
 from __future__ import annotations
 
-import uuid
-from typing import List
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import or_, select
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-
-from ..deps import get_current_user, get_db
+from ..deps import get_current_user, get_owner_manager, get_db
 from ..models.database import Store, User
-from ..models.schemas import StoreOut
+from ..models.schemas import StoreOut, StoreUpdate
 
 router = APIRouter(prefix="/api/stores", tags=["stores"])
 
 
-@router.get("", response_model=List[StoreOut])
-@router.get("/", response_model=List[StoreOut])
-def list_stores(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-) -> List[StoreOut]:
-    """Get active stores list for inter-store operations."""
-    stores = db.scalars(select(Store).where(Store.is_active == True)).all()
-    return stores
+@router.get("")
+def list_stores(user: User = Depends(get_current_user), db=Depends(get_db)):
+    """Stores visible to this user: their own store plus any store they own."""
+    q = select(Store).where(
+        or_(Store.id == user.store_id, Store.owner_id == user.id)
+    )
+    return [
+        {
+            "id": str(s.id),
+            "name": s.name,
+            "address": s.address,
+            "city": s.city,
+            "phone": getattr(s, "phone", None),
+            "gst_number": getattr(s, "gst_number", None),
+            "store_type": s.store_type,
+            "is_active": s.is_active,
+        }
+        for s in db.scalars(q).all()
+    ]
 
 
-@router.get("/{store_id}", response_model=StoreOut)
-def get_store(
-    store_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-) -> StoreOut:
-    """Get store details by ID."""
-    store = db.scalar(select(Store).where(Store.id == store_id))
+@router.get("/current", response_model=StoreOut)
+def get_current_store(user: User = Depends(get_current_user), db=Depends(get_db)):
+    if not user.store_id:
+        raise HTTPException(400, "User is not assigned to a store")
+    store = db.get(Store, user.store_id)
     if not store:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Store not found")
+        raise HTTPException(404, "Store not found")
+    return store
+
+
+@router.put("/current", response_model=StoreOut)
+def update_current_store(payload: StoreUpdate, user: User = Depends(get_owner_manager), db=Depends(get_db)):
+    if not user.store_id:
+        raise HTTPException(400, "User is not assigned to a store")
+    store = db.get(Store, user.store_id)
+    if not store:
+        raise HTTPException(404, "Store not found")
+
+    for field, val in payload.model_dump(exclude_unset=True).items():
+        setattr(store, field, val)
+
+    db.commit()
+    db.refresh(store)
     return store

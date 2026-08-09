@@ -1,53 +1,122 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', 'Courier New', Courier, monospace;
+  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", "Courier New", Courier, monospace;
 
-  /* Extending tailwind utilities */
-  --color-brand-green: #0FA958;
-  --color-brand-green-dark: #063120;
-  --color-brand-green-light: #E6F6ED;
-  --color-brand-red: #EF4444;
-  --color-brand-red-light: #FEE2E2;
-  --color-brand-orange: #F59E0B;
-  --color-brand-orange-light: #FEF3C7;
-  --color-brand-blue: #3B82F6;
-  --color-brand-blue-light: #DBEAFE;
-  --color-bg-app: #F4F7F6;
-  --color-bg-surface: #FFFFFF;
-  --color-border-default: #E2E8F0;
-  --color-border-subtle: #F1F5F9;
-  --color-text-primary: #0F172A;
-  --color-text-secondary: #475569;
-  --color-text-muted: #94A3B8;
+  /* ------------------------------------------------------------------
+   * Surfaces
+   * ---------------------------------------------------------------- */
+  --color-canvas: #f5f6f5; /* app background — warm off-white */
+  --color-surface: #ffffff; /* cards, panels, tables */
+  --color-elevated: #fcfdfc; /* raised wells on canvas */
+  --color-sidebar: #fafbf9; /* sidebar — warm white */
+  --color-subtle: #f0f2f0; /* hover wells, table row hover */
+
+  /* ------------------------------------------------------------------
+   * Text
+   * ---------------------------------------------------------------- */
+  --color-ink: #1a211e; /* primary text — warm charcoal */
+  --color-dim: #56605a; /* secondary text */
+  --color-muted: #8a938e; /* muted text */
+  --color-faint: #adb5b0; /* placeholder / tertiary */
+
+  /* ------------------------------------------------------------------
+   * Borders
+   * ---------------------------------------------------------------- */
+  --color-line: #e3e6e3; /* default border */
+  --color-line-subtle: #edf0ed; /* faint divider */
+  --color-line-strong: #c8cec9; /* strong border */
+
+  /* ------------------------------------------------------------------
+   * Brand — deep forest green (used sparingly)
+   * ---------------------------------------------------------------- */
+  --color-brand: #157347;
+  --color-brand-strong: #0f5a37;
+  --color-brand-soft: #e6f2ea;
+  --color-brand-bright: #0fa958; /* reserved for the logo mark / pulse */
+
+  /* ------------------------------------------------------------------
+   * Semantic
+   * ---------------------------------------------------------------- */
+  --color-success: #157347;
+  --color-success-soft: #e6f2ea;
+  --color-warning: #a16207;
+  --color-warning-soft: #fbf1dc;
+  --color-danger: #b3261e;
+  --color-danger-soft: #faeae8;
+  --color-info: #1d5fd0;
+  --color-info-soft: #e8f0fd;
+
+  /* ------------------------------------------------------------------
+   * Legacy aliases (migration scaffolding — replaced as pages are themed)
+   * ---------------------------------------------------------------- */
+  --color-bg-app: #f5f6f5;
+  --color-bg-surface: #ffffff;
+  --color-border-default: #e3e6e3;
+  --color-border-subtle: #edf0ed;
+  --color-text-primary: #1a211e;
+  --color-text-secondary: #56605a;
+  --color-text-muted: #8a938e;
+  --color-brand-green: #157347;
+  --color-brand-green-dark: #0f5a37;
+  --color-brand-green-light: #e6f2ea;
+  --color-brand-red: #b3261e;
+  --color-brand-red-light: #faeae8;
+  --color-brand-orange: #a16207;
+  --color-brand-orange-light: #fbf1dc;
+  --color-brand-blue: #1d5fd0;
+  --color-brand-blue-light: #e8f0fd;
+
+  /* ------------------------------------------------------------------
+   * Radius — restrained, business software
+   * ---------------------------------------------------------------- */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* ------------------------------------------------------------------
+   * Shadows — restrained; borders do the work
+   * ---------------------------------------------------------------- */
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.05);
+  --shadow-lift: 0 2px 6px rgba(16, 24, 40, 0.06), 0 4px 12px rgba(16, 24, 40, 0.06);
+  --shadow-popover: 0 8px 24px rgba(16, 24, 40, 0.12), 0 2px 8px rgba(16, 24, 40, 0.06);
 }
 
 :root {
-  --bg-app: #F4F7F6;
-  --bg-surface: #FFFFFF;
-  --border-default: #E2E8F0;
-  --text-primary: #0F172A;
-  --text-secondary: #475569;
-  --text-muted: #94A3B8;
-  
-  --brand-green: #0FA958;
-  --brand-green-dark: #063120;
-  --brand-green-light: #E6F6ED;
-  
-  --brand-red: #EF4444;
-  --brand-red-light: #FEE2E2;
-  
-  --brand-orange: #F59E0B;
-  --brand-orange-light: #FEF3C7;
-  
-  --brand-blue: #3B82F6;
-  --brand-blue-light: #DBEAFE;
+  --bg-app: #f5f6f5;
+  --bg-surface: #ffffff;
+  --border-default: #e3e6e3;
+  --text-primary: #1a211e;
+  --text-secondary: #56605a;
+  --text-muted: #8a938e;
 
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
+  --brand: #157347;
+  --brand-strong: #0f5a37;
+  --brand-soft: #e6f2ea;
+
+  --brand-green: #157347;
+  --brand-green-dark: #0f5a37;
+  --brand-green-light: #e6f2ea;
+
+  --brand-red: #b3261e;
+  --brand-red-light: #faeae8;
+
+  --brand-orange: #a16207;
+  --brand-orange-light: #fbf1dc;
+
+  --brand-blue: #1d5fd0;
+  --brand-blue-light: #e8f0fd;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.05);
+  --shadow-popover: 0 8px 24px rgba(16, 24, 40, 0.12), 0 2px 8px rgba(16, 24, 40, 0.06);
 }
 
 @layer base {
@@ -56,30 +125,51 @@
     padding: 0;
     margin: 0;
   }
-  
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
-    background-color: var(--bg-app);
-    color: var(--text-primary);
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
     font-family: var(--font-sans);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background-color: var(--color-brand-soft);
+    color: var(--color-brand-strong);
   }
 }
 
 @layer utilities {
-  .glass-panel {
-    background-color: var(--bg-surface);
-    border: 1px solid var(--border-default);
-    border-radius: var(--radius-md);
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.03);
+  .focus-ring {
+    outline: none;
   }
-  
-  .glass-panel:hover {
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.03);
+  .focus-ring:focus-visible {
+    box-shadow: 0 0 0 3px var(--color-brand-soft);
+  }
+
+  .card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+  }
+
+  /* Migration scaffolding — replaced by `.card` + tokens as pages are themed */
+  .glass-panel {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
   }
 
   .premium-shadow {
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+    box-shadow: 0 10px 25px -5px rgba(16, 24, 40, 0.06), 0 8px 10px -6px rgba(16, 24, 40, 0.03);
   }
 }
 
@@ -91,27 +181,9 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #CBD5E1;
+  background: #d0d6d2;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94A3B8;
-}
-@keyframes scan-line {
-  0% { top: 0; opacity: 0; }
-  10% { opacity: 1; }
-  90% { opacity: 1; }
-  100% { top: 100%; opacity: 0; }
-}
-.animate-scan-line {
-  animation: scan-line 2s linear infinite;
-}
-/* Hide number input arrows */
-.hide-arrows::-webkit-outer-spin-button,
-.hide-arrows::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-.hide-arrows {
-  -moz-appearance: textfield;
+  background: #a9b1ac;
 }

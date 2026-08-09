@@ -76,11 +76,9 @@ def extract_invoice_text(image_bytes: bytes) -> OcrResult:
         except Exception as e:
             print(f"Gemini OCR Failed: {e}")
 
-    # Fallback to demo data if Gemini fails or is not configured. The demo
-    # catalog (seed) uses these exact product names so the fuzzy matcher can
-    # confirm them, keeping the receiving wizard usable end-to-end offline.
+    # Fallback to dummy data if Gemini fails or is not configured
     if not parsed_items:
-        source = "mock"
+        source = "mock_parser"
         text = "MOCK INVOICE TEXT"
         parsed_items = [
             {
@@ -89,7 +87,7 @@ def extract_invoice_text(image_bytes: bytes) -> OcrResult:
                 "quantity": 20,
                 "price": 50.0,
                 "batch_number": "B2284",
-                "expiry_date": "2026-08-11",
+                "expiry_date": "2026-08-11"
             },
             {
                 "line_text": "Mother Dairy Curd 400g 40 20.00",
@@ -97,7 +95,7 @@ def extract_invoice_text(image_bytes: bytes) -> OcrResult:
                 "quantity": 40,
                 "price": 20.0,
                 "batch_number": "B2213",
-                "expiry_date": "2026-08-11",
+                "expiry_date": "2026-08-10"
             },
             {
                 "line_text": "Britannia Bread 400g 30 25.00",
@@ -105,8 +103,8 @@ def extract_invoice_text(image_bytes: bytes) -> OcrResult:
                 "quantity": 30,
                 "price": 25.0,
                 "batch_number": "B2187",
-                "expiry_date": "2026-08-14",
-            },
+                "expiry_date": "2026-08-14"
+            }
         ]
 
     return OcrResult(raw_text=text, source=source, parsed_items=parsed_items)

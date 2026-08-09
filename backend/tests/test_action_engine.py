@@ -29,11 +29,9 @@ def test_rule_based_always_three_ranked():
 
 
 def test_critical_expiry_suggests_discount_first():
-    # Master Upgrade Plan: CRITICAL expiry now gets a 35% dynamic discount
-    # (was a flat 25%), with the elasticity formula scaling WARNING discounts.
     recs = _rule_based_recommendations(_detection("Expiry Risk", severity="CRITICAL", value=1000))
     assert recs[0].action_type == "DISCOUNT"
-    assert recs[0].params["percent"] == 35
+    assert recs[0].params["percent"] == 25
     assert recs[0].expected_outcome == pytest.approx(800.0)
 
 

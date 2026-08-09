@@ -3,35 +3,36 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Activity, Mail, Lock, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Activity, Mail, Lock, ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { login } from "@/lib/api-client";
-import { getDefaultRoute } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState("rahul@greenshop.ai");
+  const [password, setPassword] = useState("demo1234");
   const [error, setError] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
-    
-    const formData = new FormData(e.currentTarget);
-    const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
-
     try {
-      const data = await login(email, password);
-      router.push(getDefaultRoute(data.user.role));
-    } catch (err: any) {
-      setError(err?.message || "Invalid credentials or login failed. Please try again.");
+      await login(email.trim(), password);
+      router.push("/dashboard");
+    } catch (err) {
+      // Surface the real failure (wrong password vs. backend unreachable) —
+      // production never fabricates a session, so errors here are honest.
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : "Login failed. Demo: rahul@greenshop.ai / demo1234";
+      setError(message);
     } finally {
       setLoading(false);
     }
   };
-
 
   return (
     <div className="min-h-screen bg-bg-app flex flex-col justify-center py-12 sm:px-6 lg:px-8 selection:bg-brand-green/30 selection:text-brand-green-dark">
@@ -59,16 +60,6 @@ export default function LoginPage() {
           animate={{ opacity: 1, y: 0 }}
           className="glass-panel p-8 sm:p-10"
         >
-          {error && (
-            <div className="mb-6 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 text-sm flex items-start gap-3">
-              <svg className="w-5 h-5 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-              </svg>
-              <span>{error}</span>
-            </div>
-          )}
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
               <label htmlFor="email" className="block text-sm font-semibold text-text-primary mb-1.5">
@@ -82,9 +73,9 @@ export default function LoginPage() {
                   id="email"
                   name="email"
                   type="email"
-                  autoComplete="email"
                   required
-                  defaultValue="store@Green Quant.ai"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="block w-full pl-10 pr-3 py-2.5 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green transition-all"
                   placeholder="you@example.com"
                 />
@@ -96,11 +87,6 @@ export default function LoginPage() {
                 <label htmlFor="password" className="block text-sm font-semibold text-text-primary">
                   Password
                 </label>
-                <div className="text-sm">
-                  <a href="#" className="font-semibold text-brand-green hover:text-brand-green-dark transition-colors">
-                    Forgot password?
-                  </a>
-                </div>
               </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -110,14 +96,20 @@ export default function LoginPage() {
                   id="password"
                   name="password"
                   type="password"
-                  autoComplete="current-password"
                   required
-                  defaultValue="password123"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="block w-full pl-10 pr-3 py-2.5 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green transition-all"
                   placeholder="••••••••"
                 />
               </div>
             </div>
+
+            {error && (
+              <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
 
             <div>
               <button
@@ -125,13 +117,7 @@ export default function LoginPage() {
                 disabled={loading}
                 className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-brand-green hover:bg-brand-green-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-green transition-all disabled:opacity-70"
               >
-                {loading ? (
-                  "Signing in..."
-                ) : (
-                  <>
-                    Sign in to Dashboard <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
+                {loading ? "Signing in..." : "Sign in to Dashboard"} <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           </form>
@@ -140,3 +126,4 @@ export default function LoginPage() {
     </div>
   );
 }
+

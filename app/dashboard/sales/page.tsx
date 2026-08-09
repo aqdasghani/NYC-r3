@@ -1,450 +1,258 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import { Search, ShoppingBag, Plus, Minus, Trash2, CreditCard, Banknote, Receipt, CheckCircle, Printer, X, Monitor, Camera, ScanLine } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { TrendingUp, ShoppingCart, Package, Calendar, BarChart2 } from "lucide-react";
+import { ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
+import { Tabs, type TabItem } from "@/components/ui";
+import { formatINR, formatCompactINR } from "@/lib/utils";
+
 import { apiFetch } from "@/lib/api-client";
 
-import { formatINR } from "@/lib/utils";
-import { BarcodeScanner } from "@/components/scanner/BarcodeScanner";
-
-// Types
-interface Product {
-  id: string;
-  name: string;
-  barcode: string;
-  selling_price: number;
-  gst_rate: number;
-  stock: number;
+async function fetchWithAuth(path: string) {
+  return apiFetch<any>(path);
 }
 
-interface CartItem {
-  product: Product;
-  quantity: number;
-  discount_type?: "PERCENTAGE" | "FLAT";
-  discount_value?: number;
-}
-
-export default function POSPage() {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [searchResults, setSearchResults] = useState<Product[]>([]);
-  const [cart, setCart] = useState<CartItem[]>([]);
-  
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [showCamera, setShowCamera] = useState(false);
-  
-  // Checkout state
-  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD" | "UPI">("CASH");
-  const [amountPaid, setAmountPaid] = useState<string>("");
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [successInvoice, setSuccessInvoice] = useState<any | null>(null);
-
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  
-  // Global Barcode Scanner Buffer (for hardware USB scanners)
-  const barcodeBuffer = useRef<string>("");
-  const barcodeTimeout = useRef<NodeJS.Timeout | null>(null);
+export default function SalesDashboard() {
+  const [activeTab, setActiveTab] = useState<"Overview" | "Today" | "Weekly" | "Monthly">("Overview");
+  const [kpis, setKpis] = useState<{
+    today_revenue: number;
+    today_orders: number;
+    today_units: number;
+    mtd_revenue: number;
+  } | null>(null);
+  const [chartData, setChartData] = useState<any[]>([]);
+  const [weeklyData, setWeeklyData] = useState<{ this_week: number; last_week: number; growth: number | null } | null>(null);
+  const [monthlyData, setMonthlyData] = useState<{ this_month: number; last_month: number; growth: number | null } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    searchInputRef.current?.focus();
-  }, []);
-
-  // Global keydown listener for USB Hardware Scanners
-  useEffect(() => {
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if (document.activeElement === searchInputRef.current && e.key !== "Enter") {
-        return;
-      }
-      if (document.activeElement?.tagName === "INPUT" && (document.activeElement as HTMLInputElement).type === "number") {
-        return;
-      }
-
-      if (e.key === "Enter") {
-        if (barcodeBuffer.current.length > 3) {
-          e.preventDefault();
-          handleBarcodeScanned(barcodeBuffer.current);
-          barcodeBuffer.current = "";
-        }
-        return;
-      }
-
-      if (e.key.length === 1 && /^[a-zA-Z0-9-]$/.test(e.key)) {
-        barcodeBuffer.current += e.key;
-        if (barcodeTimeout.current) clearTimeout(barcodeTimeout.current);
-        barcodeTimeout.current = setTimeout(() => {
-          barcodeBuffer.current = "";
-        }, 50);
-      }
-    };
-
-    window.addEventListener("keydown", handleGlobalKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleGlobalKeyDown);
-      if (barcodeTimeout.current) clearTimeout(barcodeTimeout.current);
-    };
-  }, []);
-
-  const handleBarcodeScanned = async (code: string) => {
-    setSearchLoading(true);
-    try {
-      const product = await apiFetch<Product>(`/api/inventory/barcode/${code}`);
-      if (product) {
-        addToCart(product);
-        setSearchTerm("");
-      }
-    } catch (err: any) {
-      alert(`Product not found for barcode: ${code}`);
-    } finally {
-      setSearchLoading(false);
-    }
-  };
-
-  // Debounced Search
-  useEffect(() => {
-    const fetchProducts = async () => {
-      if (!searchTerm || searchTerm.length < 2) {
-        setSearchResults([]);
-        return;
-      }
-      setSearchLoading(true);
+    async function loadData() {
+      setLoading(true);
+      setError(null);
       try {
-        const data = await apiFetch<{ items: Product[] }>(`/api/inventory/products?search=${encodeURIComponent(searchTerm)}&page_size=10`);
-        setSearchResults(data.items || []);
-      } catch (err) {
-        console.error("Failed to search products", err);
+        // Always load KPIs
+        const dashboard = await fetchWithAuth("/api/analytics/dashboard").catch(() => null);
+        if (dashboard && dashboard.kpis) {
+          setKpis({
+            today_revenue: dashboard.kpis.today_revenue || 0,
+            today_orders: dashboard.kpis.today_orders || 0,
+            today_units: dashboard.kpis.today_units || 0,
+            mtd_revenue: dashboard.kpis.mtd_revenue || 0,
+          });
+        } else {
+          setKpis({ today_revenue: 0, today_orders: 0, today_units: 0, mtd_revenue: 0 });
+        }
+
+        if (activeTab === "Overview") {
+          const trend = await fetchWithAuth("/api/analytics/sales-trend?days=30");
+          setChartData(trend || []);
+        } else if (activeTab === "Today") {
+          const hourly = await fetchWithAuth("/api/analytics/hourly");
+          setChartData(hourly || []);
+        } else if (activeTab === "Weekly") {
+          const weekly = await fetchWithAuth("/api/analytics/weekly");
+          setWeeklyData(
+            weekly
+              ? {
+                  this_week: weekly.this_week?.revenue ?? 0,
+                  last_week: weekly.last_week?.revenue ?? 0,
+                  growth: weekly.revenue_growth_pct ?? null,
+                }
+              : { this_week: 0, last_week: 0, growth: null }
+          );
+        } else if (activeTab === "Monthly") {
+          const monthly = await fetchWithAuth("/api/analytics/monthly");
+          setMonthlyData(
+            monthly
+              ? {
+                  this_month: monthly.this_month?.revenue ?? 0,
+                  last_month: monthly.last_month?.revenue ?? 0,
+                  growth: monthly.revenue_growth_pct ?? null,
+                }
+              : { this_month: 0, last_month: 0, growth: null }
+          );
+        }
+      } catch (err: any) {
+        setError(err.message || "Failed to load data");
       } finally {
-        setSearchLoading(false);
+        setLoading(false);
       }
-    };
-    
-    const timeoutId = setTimeout(fetchProducts, 300);
-    return () => clearTimeout(timeoutId);
-  }, [searchTerm]);
-
-  const addToCart = (product: Product) => {
-    setCart(prev => {
-      const existing = prev.find(i => i.product.id === product.id);
-      if (existing) {
-        return prev.map(i => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
-      }
-      return [{ product, quantity: 1 }, ...prev];
-    });
-  };
-
-  const updateQuantity = (productId: string, newQty: number) => {
-    if (newQty < 1 || isNaN(newQty)) return;
-    setCart(prev => prev.map(i => i.product.id === productId ? { ...i, quantity: newQty } : i));
-  };
-
-  const removeItem = (productId: string) => {
-    setCart(prev => prev.filter(i => i.product.id !== productId));
-  };
-
-  // Calculations
-  const subtotal = cart.reduce((acc, item) => acc + (item.product.selling_price * item.quantity), 0);
-  const estimatedTax = cart.reduce((acc, item) => acc + ((item.product.selling_price * item.quantity) * ((item.product.gst_rate || 0) / 100)), 0);
-  const grandTotal = subtotal + estimatedTax;
-
-  const handleCheckout = async () => {
-    if (cart.length === 0) return;
-    
-    setCheckoutLoading(true);
-    try {
-      const payload = {
-        payment_method: paymentMethod,
-        amount_paid: amountPaid ? parseFloat(amountPaid) : grandTotal,
-        items: cart.map(i => ({
-          product_id: i.product.id,
-          quantity: i.quantity,
-          discount_type: i.discount_type,
-          discount_value: i.discount_value
-        }))
-      };
-
-      const data = await apiFetch<{ invoice: any }>("/api/pos/sale", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      
-      setSuccessInvoice(data.invoice);
-      setCart([]);
-      setAmountPaid("");
-      setSearchTerm("");
-    } catch (err: any) {
-      alert("Checkout Error: " + (err.message || "Failed to process sale"));
-    } finally {
-      setCheckoutLoading(false);
     }
-  };
+    loadData();
+  }, [activeTab]);
 
+  const tabs: TabItem[] = [
+    { key: "Overview", label: "Overview" },
+    { key: "Today", label: "Today" },
+    { key: "Weekly", label: "Weekly" },
+    { key: "Monthly", label: "Monthly" },
+  ];
 
-  if (successInvoice) {
-    return (
-      <div className="h-full flex items-center justify-center p-6 animate-in fade-in zoom-in duration-300">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full border border-slate-100 relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-2 bg-emerald-500"></div>
-          
-          <div className="text-center mb-6 pt-4">
-            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-8 h-8 text-emerald-600" />
-            </div>
-            <h2 className="text-2xl font-bold text-slate-800 mb-1">Payment Successful</h2>
-            <p className="text-slate-500">Invoice #{successInvoice.invoice_number}</p>
-          </div>
-          
-          <div className="bg-slate-50 rounded-xl p-4 mb-6 border border-slate-100">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-slate-500 font-medium">Grand Total</span>
-              <span className="text-xl font-bold text-slate-800">{formatINR(successInvoice.grand_total)}</span>
-            </div>
-            <div className="flex justify-between items-center text-sm mt-1">
-              <span className="text-slate-500">Amount Paid</span>
-              <span className="text-slate-700 font-medium">{formatINR(successInvoice.amount_paid)}</span>
-            </div>
-          </div>
-          
-          <div className="flex gap-3">
-            <button className="flex-1 bg-white border-2 border-slate-200 text-slate-700 hover:bg-slate-50 font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors">
-              <Printer className="w-5 h-5" />
-              Print
-            </button>
-            <button 
-              onClick={() => {
-                setSuccessInvoice(null);
-                setTimeout(() => searchInputRef.current?.focus(), 100);
-              }}
-              className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-4 rounded-xl transition-colors shadow-lg shadow-emerald-500/20"
-            >
-              New Sale
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const formatYAxis = (val: number) => `₹${val >= 100000 ? (val / 100000).toFixed(1) + "L" : val >= 1000 ? (val / 1000).toFixed(1) + "K" : val}`;
 
   return (
-    <div className="h-[calc(100vh-2rem)] flex gap-6">
-      {/* LEFT: Search & Results / Scanner */}
-      <div className="flex-1 flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        {/* Search Bar */}
-        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              placeholder="Search by name or type barcode..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-10 py-4 bg-white border border-slate-200 rounded-xl text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-sm transition-shadow"
-            />
-            {searchTerm && (
-              <button onClick={() => setSearchTerm("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
-            )}
-            {searchLoading && (
-              <div className="absolute right-12 top-1/2 -translate-y-1/2">
-                <div className="animate-spin w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full" />
-              </div>
-            )}
+    <div className="space-y-6 pb-12">
+      <div>
+        <h1 className="text-xl font-semibold tracking-tight text-ink">Sales & Performance</h1>
+        <p className="mt-1 text-sm text-muted">Track revenue and sales performance across time periods.</p>
+      </div>
+
+      {/* KPI Row */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="rounded-lg border border-line bg-surface p-4 shadow-card">
+          <div className="flex items-center gap-2 text-muted mb-2">
+            <TrendingUp className="w-4 h-4" />
+            <span className="text-sm font-medium">Today Revenue</span>
           </div>
-          
-          <button
-            onClick={() => setShowCamera(!showCamera)}
-            className={`px-6 py-4 rounded-xl font-bold flex items-center gap-2 transition-colors ${
-              showCamera ? "bg-red-500 text-white hover:bg-red-600" : "bg-[#063120] text-white hover:bg-[#063120]/90"
-            }`}
-          >
-            {showCamera ? <ScanLine className="w-5 h-5" /> : <Camera className="w-5 h-5" />}
-            {showCamera ? "Hide Camera" : "Camera"}
-          </button>
+          <div className="text-2xl font-semibold text-brand">{formatINR(kpis?.today_revenue || 0)}</div>
         </div>
-
-        {/* Content Area */}
-        <div className="flex-1 p-4 overflow-y-auto bg-slate-50/20 relative">
-          {showCamera && (
-            <div className="mb-6 animate-in fade-in slide-in-from-top-4 duration-300">
-              <div className="bg-slate-900 rounded-2xl p-4 shadow-xl">
-                <BarcodeScanner onScan={handleBarcodeScanned} />
-              </div>
-            </div>
-          )}
-
-          {!showCamera && searchResults.length === 0 && !searchTerm && (
-            <div className="h-full min-h-[300px] flex flex-col items-center justify-center text-slate-400">
-              <Monitor className="w-16 h-16 mb-4 opacity-10" />
-              <p className="font-medium text-slate-500 text-lg">Ready for Next Sale</p>
-              <p className="text-sm mt-1 text-slate-400 text-center max-w-sm">
-                Scan a barcode with your USB scanner,<br/>
-                click "Camera" to scan with your phone,<br/>
-                or type a product name to search.
-              </p>
-            </div>
-          )}
-
-          {searchResults.length > 0 && (
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-12">
-              {searchResults.map(product => (
-                <button
-                  key={product.id}
-                  onClick={() => addToCart(product)}
-                  className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col text-left hover:border-emerald-500 hover:shadow-md transition-all group active:scale-95"
-                >
-                  <div className="text-sm font-semibold text-slate-800 line-clamp-2 mb-1 group-hover:text-emerald-700 transition-colors">
-                    {product.name}
-                  </div>
-                  <div className="text-xs text-slate-400 font-mono mb-3">{product.barcode || 'No Barcode'}</div>
-                  
-                  <div className="mt-auto flex items-end justify-between w-full">
-                    <div className="text-lg font-bold text-slate-900">{formatINR(product.selling_price)}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
+        <div className="rounded-lg border border-line bg-surface p-4 shadow-card">
+          <div className="flex items-center gap-2 text-muted mb-2">
+            <ShoppingCart className="w-4 h-4" />
+            <span className="text-sm font-medium">Today Orders</span>
+          </div>
+          <div className="text-2xl font-semibold text-ink">{kpis?.today_orders || 0}</div>
+        </div>
+        <div className="rounded-lg border border-line bg-surface p-4 shadow-card">
+          <div className="flex items-center gap-2 text-muted mb-2">
+            <Package className="w-4 h-4" />
+            <span className="text-sm font-medium">Today Units</span>
+          </div>
+          <div className="text-2xl font-semibold text-ink">{kpis?.today_units || 0}</div>
+        </div>
+        <div className="rounded-lg border border-line bg-surface p-4 shadow-card">
+          <div className="flex items-center gap-2 text-muted mb-2">
+            <Calendar className="w-4 h-4" />
+            <span className="text-sm font-medium">MTD Revenue</span>
+          </div>
+          <div className="text-2xl font-semibold text-info">{formatINR(kpis?.mtd_revenue || 0)}</div>
         </div>
       </div>
 
-      {/* RIGHT: Cart & Checkout */}
-      <div className="w-[400px] flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden shrink-0">
-        <div className="p-4 border-b border-slate-100 bg-[#063120] text-white flex justify-between items-center">
-          <div className="flex items-center gap-2 font-semibold">
-            <ShoppingBag className="w-5 h-5 text-[#0FA958]" />
-            <span>Current Sale</span>
-          </div>
-          <div className="bg-white/10 text-white text-xs px-2.5 py-1 rounded-full font-bold">
-            {cart.length} {cart.length === 1 ? 'Item' : 'Items'}
-          </div>
-        </div>
+      {/* Tabs */}
+      <Tabs
+        items={tabs}
+        active={activeTab}
+        onChange={(key) => setActiveTab(key as "Overview" | "Today" | "Weekly" | "Monthly")}
+      />
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/30">
-          {cart.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-slate-400">
-              <Receipt className="w-12 h-12 mb-3 opacity-20" />
-              <p className="font-medium text-slate-500">Cart is empty</p>
-            </div>
-          ) : (
-            cart.map((item) => (
-              <div key={item.product.id} className="bg-white border border-slate-200 rounded-xl p-3 flex flex-col gap-3 animate-in fade-in slide-in-from-right-4 duration-200">
-                <div className="flex justify-between items-start gap-2">
-                  <div className="flex flex-col">
-                    <div className="font-semibold text-sm text-slate-800 leading-tight">
-                      {item.product.name}
-                    </div>
-                    <div className="text-xs text-slate-500 font-mono mt-1">
-                      {item.product.barcode}
-                    </div>
-                  </div>
-                  <div className="font-bold text-slate-900 text-sm whitespace-nowrap">
-                    {formatINR(item.product.selling_price * item.quantity)}
-                  </div>
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <div className="text-xs font-mono text-slate-500">
-                    {formatINR(item.product.selling_price)}/pc
-                  </div>
-                  
-                  {/* Quantity Controls */}
-                  <div className="flex items-center bg-slate-100 rounded-lg p-0.5 border border-slate-200">
-                    <button 
-                      onClick={() => {
-                        if (item.quantity === 1) removeItem(item.product.id);
-                        else updateQuantity(item.product.id, item.quantity - 1);
-                      }}
-                      className="w-8 h-8 flex items-center justify-center text-slate-600 hover:bg-white hover:text-red-500 rounded-md transition-colors"
-                    >
-                      {item.quantity === 1 ? <Trash2 className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
-                    </button>
-                    <input
-                      type="number"
-                      min={1}
-                      value={item.quantity}
-                      onChange={(e) => updateQuantity(item.product.id, parseInt(e.target.value) || 1)}
-                      className="w-12 h-8 text-center text-sm font-bold text-slate-800 bg-transparent focus:outline-none focus:bg-white focus:ring-1 focus:ring-emerald-500 rounded-md hide-arrows"
-                    />
-                    <button 
-                      onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                      className="w-8 h-8 flex items-center justify-center text-slate-600 hover:bg-white hover:text-emerald-600 rounded-md transition-colors"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
+      {/* Tab Content */}
+      <div className="rounded-lg border border-line bg-surface shadow-card">
+        {loading && <div className="h-64 animate-pulse bg-subtle rounded-lg" />}
+        {!loading && error && (
+          <div className="p-4 text-center text-sm text-danger bg-danger-soft border border-danger/20 rounded-lg">
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && activeTab === "Overview" && (
+          <div className="p-6 space-y-4">
+            <h3 className="text-sm font-semibold text-ink">30-Day Trend</h3>
+            {chartData.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-64 text-muted">
+                <BarChart2 className="h-12 w-12 mb-2 text-muted/30" />
+                <p>No sales data yet</p>
               </div>
-            ))
-          )}
-        </div>
-
-        <div className="bg-white border-t border-slate-200 p-4 shrink-0 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)]">
-          <div className="space-y-2 mb-4 text-sm">
-            <div className="border-t border-slate-200 pt-3 mt-1 flex justify-between items-end">
-              <span className="text-slate-800 font-bold">Grand Total</span>
-              <span className="text-3xl font-black text-emerald-600 tracking-tight">{formatINR(grandTotal)}</span>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-2">
-              <button 
-                onClick={() => setPaymentMethod("CASH")}
-                className={`py-2 px-1 rounded-lg border flex flex-col items-center gap-1 transition-colors ${
-                  paymentMethod === "CASH" ? "border-emerald-500 bg-emerald-50 text-emerald-700 font-bold" : "border-slate-200 text-slate-600"
-                }`}
-              >
-                <Banknote className="w-5 h-5" />
-                <span className="text-[10px] font-bold uppercase tracking-wide">Cash</span>
-              </button>
-              <button 
-                onClick={() => setPaymentMethod("CARD")}
-                className={`py-2 px-1 rounded-lg border flex flex-col items-center gap-1 transition-colors ${
-                  paymentMethod === "CARD" ? "border-emerald-500 bg-emerald-50 text-emerald-700 font-bold" : "border-slate-200 text-slate-600"
-                }`}
-              >
-                <CreditCard className="w-5 h-5" />
-                <span className="text-[10px] font-bold uppercase tracking-wide">Card</span>
-              </button>
-              <button 
-                onClick={() => setPaymentMethod("UPI")}
-                className={`py-2 px-1 rounded-lg border flex flex-col items-center gap-1 transition-colors ${
-                  paymentMethod === "UPI" ? "border-emerald-500 bg-emerald-50 text-emerald-700 font-bold" : "border-slate-200 text-slate-600"
-                }`}
-              >
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h-2v-6h2v6zm4 0h-2v-6h2v6zm-2-8h-2V7h2v2z"/>
-                </svg>
-                <span className="text-[10px] font-bold uppercase tracking-wide">UPI</span>
-              </button>
-            </div>
-
-            {paymentMethod === "CASH" && (
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-slate-400">₹</span>
-                <input 
-                  type="number" 
-                  placeholder="Amount Tendered" 
-                  value={amountPaid}
-                  onChange={e => setAmountPaid(e.target.value)}
-                  className="w-full pl-8 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-semibold text-slate-800 placeholder:font-normal"
-                />
+            ) : (
+              <div className="h-64 sm:h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#157347" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#157347" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#64748B" }} dy={10} interval="preserveStartEnd" />
+                    <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#64748B" }} tickFormatter={formatYAxis} />
+                    <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#64748B" }} />
+                    <Tooltip
+                      contentStyle={{ borderRadius: "8px", border: "1px solid #E2E8F0", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }}
+                      formatter={(value: any, name: any) => [name === "revenue" ? formatINR(value) : value, name === "revenue" ? "Revenue" : "Units"]}
+                    />
+                    <Area yAxisId="left" type="monotone" dataKey="revenue" stroke="#157347" strokeWidth={2} fillOpacity={1} fill="url(#colorRevenue)" />
+                    <Area yAxisId="right" type="monotone" dataKey="units" stroke="#6366F1" strokeWidth={2} fillOpacity={0} />
+                  </AreaChart>
+                </ResponsiveContainer>
               </div>
             )}
-
-            <button 
-              onClick={handleCheckout}
-              disabled={cart.length === 0 || checkoutLoading}
-              className="w-full py-3.5 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 disabled:opacity-50"
-            >
-              {checkoutLoading ? (
-                <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
-              ) : (
-                <>Charge {formatINR(grandTotal)}</>
-              )}
-            </button>
           </div>
-        </div>
+        )}
+
+        {!loading && !error && activeTab === "Today" && (
+          <div className="p-6 space-y-4">
+            <h3 className="text-sm font-semibold text-ink">Hourly Revenue</h3>
+            {chartData.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-64 text-muted">
+                <BarChart2 className="h-12 w-12 mb-2 text-muted/30" />
+                <p>No sales data yet</p>
+              </div>
+            ) : (
+              <div className="h-64 sm:h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                    <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#64748B" }} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#64748B" }} tickFormatter={formatYAxis} />
+                    <Tooltip
+                      cursor={{ fill: "#F1F5F9" }}
+                      contentStyle={{ borderRadius: "8px", border: "1px solid #E2E8F0", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }}
+                      formatter={(value: any) => [formatINR(value), "Revenue"]}
+                      labelFormatter={(label) => `Hour: ${label}:00`}
+                    />
+                    <Bar dataKey="revenue" fill="#157347" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!loading && !error && activeTab === "Weekly" && weeklyData && (
+          <div className="p-6 space-y-6">
+            <h3 className="text-sm font-semibold text-ink">Weekly Comparison</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="rounded-lg border border-line bg-subtle p-6">
+                <div className="text-sm text-muted mb-1">This Week</div>
+                <div className="text-3xl font-bold text-ink">{formatINR(weeklyData.this_week)}</div>
+              </div>
+              <div className="rounded-lg border border-line bg-subtle p-6">
+                <div className="text-sm text-muted mb-1">Last Week</div>
+                <div className="text-3xl font-bold text-dim">{formatINR(weeklyData.last_week)}</div>
+              </div>
+            </div>
+            <div className="rounded-lg border border-line bg-surface p-4 flex items-center justify-between">
+              <span className="font-medium text-muted">Growth</span>
+              <span className={`font-bold ${weeklyData.growth === null ? "text-muted" : weeklyData.growth >= 0 ? "text-success" : "text-danger"}`}>
+                {weeklyData.growth === null ? "— insufficient data" : `${weeklyData.growth >= 0 ? "+" : ""}${weeklyData.growth}%`}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {!loading && !error && activeTab === "Monthly" && monthlyData && (
+          <div className="p-6 space-y-6">
+            <h3 className="text-sm font-semibold text-ink">Monthly Comparison</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="rounded-lg border border-line bg-subtle p-6">
+                <div className="text-sm text-muted mb-1">This Month</div>
+                <div className="text-3xl font-bold text-ink">{formatINR(monthlyData.this_month)}</div>
+              </div>
+              <div className="rounded-lg border border-line bg-subtle p-6">
+                <div className="text-sm text-muted mb-1">Last Month</div>
+                <div className="text-3xl font-bold text-dim">{formatINR(monthlyData.last_month)}</div>
+              </div>
+            </div>
+            <div className="rounded-lg border border-line bg-surface p-4 flex items-center justify-between">
+              <span className="font-medium text-muted">Growth</span>
+              <span className={`font-bold ${monthlyData.growth === null ? "text-muted" : monthlyData.growth >= 0 ? "text-success" : "text-danger"}`}>
+                {monthlyData.growth === null ? "— insufficient data" : `${monthlyData.growth >= 0 ? "+" : ""}${monthlyData.growth}%`}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

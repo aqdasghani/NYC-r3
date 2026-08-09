@@ -1,55 +1,69 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { 
-  ScanSearch, CheckCircle2, AlertTriangle, 
-  XCircle, Zap, TrendingDown, BadgePercent,
-  ArrowRightLeft, RotateCcw, PackagePlus
-} from "lucide-react";
-import { getActions, executeAction, dismissAction, generateActions } from "@/lib/api";
-import { formatINR } from "@/lib/utils";
+import React, { useEffect, useState } from "react";
+import { Zap, Tag, RefreshCw, ShoppingCart, CornerDownLeft, CheckCircle2, XCircle, ScanSearch, AlertTriangle } from "lucide-react";
+import { dismissAction, executeAction, generateActions, getActions } from "@/lib/api";
+import { subscribeLive } from "@/lib/live";
 import type { ActionOut, BackendRecommendation } from "@/lib/backend-types";
-import { GlassCard } from "@/components/ui/GlassCard";
+import { formatINR } from "@/lib/utils";
+import { Card, Badge, Button, Tabs, type TabItem, EmptyState, KpiCard } from "@/components/ui";
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.1 } },
-};
-
-const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0 },
-};
-
-function getRiskBadgeColor(severity: string) {
-  if (severity === "CRITICAL") return "bg-red-100 text-red-800 border-red-200";
-  if (severity === "WARNING") return "bg-amber-100 text-amber-800 border-amber-200";
-  return "bg-blue-100 text-blue-800 border-blue-200";
+function planMeta(action: BackendRecommendation) {
+  switch (action.action_type) {
+    case "TRANSFER":
+      return { icon: RefreshCw, label: "Transfer" };
+    case "REORDER":
+      return { icon: ShoppingCart, label: "Reorder" };
+    case "RETURN":
+      return { icon: CornerDownLeft, label: "Return" };
+    case "DISCOUNT":
+    default:
+      return { icon: Tag, label: "Discount" };
+  }
 }
+
+function cardMeta(riskType: string) {
+  const t = riskType.toLowerCase();
+  if (t.includes("overstock") || t.includes("dead")) return "Transfer / Return";
+  if (t.includes("stockout") || t.includes("demand")) return "Procurement";
+  if (t.includes("expiry")) return "Sell First";
+  return "Action Needed";
+}
+
+type ActionTab = "ALL" | "CRITICAL" | "IMPORTANT" | "OPPORTUNITY";
+
+const TABS: TabItem[] = [
+  { key: "ALL", label: "All" },
+  { key: "CRITICAL", label: "Critical" },
+  { key: "IMPORTANT", label: "Important" },
+  { key: "OPPORTUNITY", label: "Opportunity" },
+];
 
 export default function ActionsPage() {
   const [actions, setActions] = useState<ActionOut[]>([]);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState<string | null>(null);
+  const [done, setDone] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
-  const [filter, setFilter] = useState<string>("All");
+  const [activeTab, setActiveTab] = useState<ActionTab>("ALL");
+  const [explainAction, setExplainAction] = useState<ActionOut | null>(null);
 
   const load = async () => {
     setLoading(true);
-    try {
-      const rows = await getActions("PENDING");
-      setActions(rows);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+    const rows = await getActions("PENDING");
+    setActions(rows);
+    setLoading(false);
   };
 
   useEffect(() => {
     void load();
+    const unsub = subscribeLive((event) => {
+      if (event.type === "recommendation_updated" || event.type === "recommendation_created") {
+        void load();
+      }
+    });
+    return unsub;
   }, []);
 
   const handleExecute = async (action: ActionOut) => {
@@ -58,12 +72,13 @@ export default function ActionsPage() {
     setWorking(action.id);
     try {
       const result = await executeAction(action.id, selected);
+      setDone((prev) => new Set(prev).add(action.id));
       setActions((prev) => prev.filter((a) => a.id !== action.id));
       setScanResult(
-        `${result.intervention} executed – ${formatINR(result.waste_prevented)} waste prevented, Green Score +${result.green_score_delta}`
+        `${result.intervention} executed — ${formatINR(result.waste_prevented)} waste prevented, Green Score +${result.green_score_delta}`
       );
-    } catch (e) {
-      setScanResult("Could not execute this action.");
+    } catch {
+      setScanResult("Could not execute this action. It may no longer be pending.");
     } finally {
       setWorking(null);
     }
@@ -85,223 +100,194 @@ export default function ActionsPage() {
     setScanResult(null);
     try {
       const result = await generateActions();
-      setScanResult(`Detection run complete – ${result.risks_detected} risks, ${result.recommendations_created} new actions.`);
+      setScanResult(`Detection run complete — ${result.risks_detected} risks, ${result.recommendations_created} new actions.`);
       await load();
-    } catch (e) {
-      setScanResult("Detection run failed.");
+    } catch {
+      setScanResult("Detection run failed — is the backend running?");
     } finally {
       setBusy(false);
     }
   };
 
-  const filters = ["All", "CRITICAL", "WARNING", "Expiry", "Overstock", "Stockout", "Margin"];
+  const filteredActions = actions.filter((action) => {
+    if (activeTab === "CRITICAL") return action.severity === "CRITICAL" || action.risk_type.toLowerCase().includes("expiry") || action.risk_type.toLowerCase().includes("stockout");
+    if (activeTab === "IMPORTANT") return action.severity === "WARNING" || action.risk_type.toLowerCase().includes("waste");
+    if (activeTab === "OPPORTUNITY") return action.risk_type.toLowerCase().includes("demand") || action.risk_type.toLowerCase().includes("overstock") || action.risk_type.toLowerCase().includes("dead");
+    return true;
+  });
 
-  const filteredActions = useMemo(() => {
-    let result = [...actions];
-    if (filter !== "All") {
-      if (filter === "CRITICAL" || filter === "WARNING") {
-        result = result.filter(a => a.severity === filter);
-      } else {
-        result = result.filter(a => a.risk_type.toLowerCase().includes(filter.toLowerCase()));
-      }
-    }
-    // Sort by value_at_risk descending
-    result.sort((a, b) => (b.value_at_risk || 0) - (a.value_at_risk || 0));
-    return result;
-  }, [actions, filter]);
-
-  const criticalActions = filteredActions.filter(a => a.severity === "CRITICAL");
-  const highPriorityActions = filteredActions.filter(a => a.severity === "WARNING" && (a.value_at_risk || 0) > 1000);
-  const optimizationActions = filteredActions.filter(a => !criticalActions.includes(a) && !highPriorityActions.includes(a));
-
-  const renderActionCard = (action: ActionOut) => {
-    const topRec = action.recommendations?.[0];
-    if (!topRec) return null;
-
-    let ActionIcon = Zap;
-    if (topRec.action_type === "DISCOUNT") ActionIcon = BadgePercent;
-    if (topRec.action_type === "TRANSFER") ActionIcon = ArrowRightLeft;
-    if (topRec.action_type === "RETURN") ActionIcon = RotateCcw;
-    if (topRec.action_type === "REORDER") ActionIcon = PackagePlus;
-
-    return (
-      <motion.div key={action.id} layout initial="hidden" animate="show" exit={{ opacity: 0, scale: 0.95 }} variants={itemVariants}>
-        <GlassCard className="p-0 overflow-hidden border border-border-default hover:border-brand-green/50 transition-colors">
-          {/* Header */}
-          <div className="flex flex-wrap items-center justify-between gap-4 p-4 border-b border-border-default bg-slate-50/50">
-            <div className="flex items-center gap-3">
-              {action.severity === "CRITICAL" && <AlertTriangle className="w-5 h-5 text-red-500" />}
-              {action.severity === "WARNING" && <AlertTriangle className="w-5 h-5 text-amber-500" />}
-              {action.severity !== "CRITICAL" && action.severity !== "WARNING" && <TrendingDown className="w-5 h-5 text-blue-500" />}
-              
-              <span className={`px-2.5 py-1 text-xs font-bold rounded-full border ${getRiskBadgeColor(action.severity)}`}>
-                {action.risk_type}
-              </span>
-            </div>
-            {action.value_at_risk !== null && (
-              <div className="text-sm font-semibold text-red-600 bg-red-50 px-3 py-1 rounded-full border border-red-100">
-                {formatINR(action.value_at_risk)} at risk
-              </div>
-            )}
-          </div>
-
-          <div className="p-5">
-            <h3 className="text-xl font-bold text-text-primary mb-4">{action.product_name}</h3>
-            
-            <div className="mb-4">
-              <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Why this matters</h4>
-              <p className="text-sm text-text-primary bg-amber-50/50 p-3 rounded-lg border border-amber-100/50">
-                {topRec.reasoning}
-              </p>
-            </div>
-            
-            <div className="mb-5">
-              <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Recommendation</h4>
-              <div className="flex items-start gap-3 bg-brand-green/5 p-4 rounded-lg border border-brand-green/20">
-                <div className="bg-brand-green/20 p-2 rounded-lg">
-                  <ActionIcon className="w-5 h-5 text-brand-green-dark" />
-                </div>
-                <div>
-                  <p className="font-semibold text-text-primary">
-                    {topRec.action_type}: {JSON.stringify(topRec.params).replace(/[{}"\\]/g, ' ')}
-                  </p>
-                  <div className="flex gap-4 mt-2 text-sm text-text-secondary">
-                    <span>Expected Impact: <strong className="text-brand-green-dark">{formatINR(topRec.expected_outcome)}</strong></span>
-                    <span>Confidence: <strong>{(topRec.confidence * 100).toFixed(0)}%</strong></span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={() => handleExecute(action)}
-                disabled={!!working}
-                className="flex-1 bg-brand-green text-black px-4 py-2 rounded-lg font-semibold hover:bg-brand-green-dark hover:text-white transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                {working === action.id ? "Executing..." : "Accept"}
-              </button>
-              <button
-                onClick={() => handleDismiss(action)}
-                disabled={!!working}
-                className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg font-medium hover:bg-slate-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                <XCircle className="w-4 h-4" />
-                Dismiss
-              </button>
-            </div>
-          </div>
-        </GlassCard>
-      </motion.div>
-    );
-  };
+  const criticalCount = actions.filter((a) => a.severity === "CRITICAL" || a.risk_type.toLowerCase().includes("expiry") || a.risk_type.toLowerCase().includes("stockout")).length;
+  const importantCount = actions.filter((a) => a.severity === "WARNING" || a.risk_type.toLowerCase().includes("waste")).length;
+  const opportunityCount = actions.filter((a) => a.risk_type.toLowerCase().includes("demand") || a.risk_type.toLowerCase().includes("overstock") || a.risk_type.toLowerCase().includes("dead")).length;
 
   return (
-    <motion.div variants={containerVariants} initial="hidden" animate="show" className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+    <div className="space-y-6 pb-12">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight mb-2">AI Action Engine</h1>
-          <p className="text-text-secondary">
-            Review and execute AI-generated strategies to prevent waste and maximize profit.
-          </p>
+          <h1 className="text-2xl font-semibold tracking-tight text-ink flex items-center gap-2">
+            <Zap className="w-5 h-5 text-brand" />
+            AI Action Engine
+          </h1>
+          <p className="mt-1 text-sm text-muted">Review and execute AI-generated strategies to prevent waste and maximize profit.</p>
         </div>
-        <button
-          onClick={handleScan}
-          disabled={busy}
-          className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2.5 rounded-lg font-medium hover:bg-slate-800 transition-colors disabled:opacity-50"
-        >
-          <ScanSearch className={`w-4 h-4 ${busy ? "animate-pulse" : ""}`} />
-          {busy ? "Scanning..." : "Run AI Scan"}
-        </button>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {filters.map(f => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors border ${
-              filter === f 
-                ? "bg-slate-800 text-white border-slate-800" 
-                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-            }`}
-          >
-            {f}
-          </button>
-        ))}
+        <Button onClick={handleScan} disabled={busy}>
+          <ScanSearch className={`w-4 h-4 mr-2 ${busy ? "animate-pulse" : ""}`} />
+          {busy ? "Scanning…" : "Run AI Scan"}
+        </Button>
       </div>
 
       {scanResult && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg flex items-center gap-3 text-sm"
-        >
-          <CheckCircle2 className="w-5 h-5 shrink-0" />
+        <div className="p-4 bg-success-soft border border-success/30 rounded-lg text-sm font-medium text-success flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
           {scanResult}
-        </motion.div>
+        </div>
       )}
 
-      {loading && (
-        <div className="p-12 text-center text-text-secondary animate-pulse">Loading AI intelligence...</div>
+      <Tabs items={TABS} active={activeTab} onChange={(k) => setActiveTab(k as ActionTab)} className="mb-6" />
+
+      {loading ? (
+        <Card>
+          <div className="p-8 text-center text-muted">Loading AI actions…</div>
+        </Card>
+      ) : filteredActions.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={<CheckCircle2 className="h-12 w-12 text-success/50" />}
+            title={actions.length === 0 ? "All Caught Up!" : "No actions in this category"}
+            description={
+              actions.length === 0
+                ? "You have reviewed all pending AI actions. Green Quant is continuously monitoring your inventory for new optimizations."
+                : "All clear for this priority level."
+            }
+          />
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {filteredActions.map((action) => {
+            const top = action.recommendations?.[0];
+            const meta = top ? planMeta(top) : planMeta({ action_type: "DISCOUNT", params: {}, expected_outcome: 0, confidence: 0, reasoning: "" } as BackendRecommendation);
+            const Icon = meta.icon;
+            const planText = top
+              ? `${top.action_type.charAt(0) + top.action_type.slice(1).toLowerCase()} — ${top.reasoning}`
+              : action.risk_type;
+            const isDone = done.has(action.id);
+            const severityTone = action.severity === "CRITICAL" ? "danger" : action.severity === "WARNING" ? "warning" : "info";
+
+            return (
+              <Card key={action.id} className={`p-6 relative ${isDone ? "opacity-60" : ""}`}>
+                <div className="flex flex-col md:flex-row gap-6 items-start md:items-center">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 mb-2 flex-wrap">
+                      <div className="w-10 h-10 rounded-lg bg-brand-soft border border-brand/20 flex items-center justify-center">
+                        <Icon className="w-5 h-5 text-brand" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-ink truncate">{action.product_name}</h3>
+                      <Badge tone="neutral">{cardMeta(action.risk_type)}</Badge>
+                      <Badge tone={severityTone}>{action.severity || "ALERT"}</Badge>
+                      <span className="text-xs font-semibold text-danger">{formatINR(action.value_at_risk ?? 0)} at risk</span>
+                    </div>
+
+                    <div className="ml-13">
+                      <p className="text-sm text-muted mb-3">
+                        {action.risk_type} · severity {action.severity}
+                      </p>
+                      <div className="inline-flex items-start gap-2 bg-subtle px-3 py-2 rounded-lg border border-line max-w-full">
+                        <Zap className="w-4 h-4 text-brand shrink-0 mt-0.5" />
+                        <span className="text-sm font-medium text-ink">{planText}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2.5 w-full md:w-auto mt-4 md:mt-0 ml-13 md:ml-0 flex-wrap">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setExplainAction(action)}
+                      className="text-xs"
+                    >
+                      Why / Calculate?
+                    </Button>
+                    <Button
+                      onClick={() => handleExecute(action)}
+                      disabled={!!working || isDone}
+                      className="flex-1 md:flex-none text-xs"
+                    >
+                      {working === action.id ? "Executing…" : "Execute Plan"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDismiss(action)}
+                      disabled={!!working || isDone}
+                      className="text-xs text-danger hover:text-danger"
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
       )}
 
-      <AnimatePresence>
-        {!loading && actions.length === 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="glass-panel p-16 text-center flex flex-col items-center justify-center border border-dashed border-slate-300"
-          >
-            <div className="w-16 h-16 bg-green-100 text-brand-green rounded-full flex items-center justify-center mb-4">
-              <CheckCircle2 className="w-8 h-8" />
+      {explainAction && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-line">
+            <div className="flex items-center justify-between border-b border-line pb-3">
+              <h3 className="font-bold text-slate-900 text-lg flex items-center gap-2">
+                <Zap className="w-5 h-5 text-amber-500" /> Math Engine Reasoning
+              </h3>
+              <button onClick={() => setExplainAction(null)} className="text-slate-400 hover:text-slate-600 font-bold text-lg">
+                ✕
+              </button>
             </div>
-            <h3 className="text-xl font-bold text-slate-800 mb-2">All Clear! No pending recommendations.</h3>
-            <p className="text-slate-500 max-w-md">
-              Your inventory is fully optimized. Green Quant will notify you when new risks are detected.
-            </p>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
-      <div className="space-y-8">
-        {criticalActions.length > 0 && (
-          <section>
-            <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-red-500"></span>
-              🔴 Critical Interventions
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {criticalActions.map(renderActionCard)}
-            </div>
-          </section>
-        )}
+            <div className="space-y-3 text-sm">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <div className="text-xs text-slate-500">Target Product</div>
+                <div className="font-bold text-slate-900 text-base">{explainAction.product_name}</div>
+              </div>
 
-        {highPriorityActions.length > 0 && (
-          <section>
-            <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-amber-500"></span>
-              🟡 High Priority
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {highPriorityActions.map(renderActionCard)}
-            </div>
-          </section>
-        )}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-100">
+                  <div className="text-xs text-amber-700">Risk Type</div>
+                  <div className="font-bold text-amber-900">{explainAction.risk_type}</div>
+                </div>
+                <div className="p-3 bg-red-50 rounded-xl border border-red-100">
+                  <div className="text-xs text-red-700">Value at Risk</div>
+                  <div className="font-bold text-red-900">{formatINR(explainAction.value_at_risk || 0)}</div>
+                </div>
+              </div>
 
-        {optimizationActions.length > 0 && (
-          <section>
-            <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-blue-500"></span>
-              🟢 Optimization Opportunities
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {optimizationActions.map(renderActionCard)}
+              <div className="p-4 bg-green-50 rounded-xl border border-green-100 space-y-2">
+                <div className="font-bold text-green-900 text-xs uppercase tracking-wider">Recommended Strategy</div>
+                <p className="text-slate-800 font-semibold text-sm">
+                  {explainAction.recommendations?.[0]?.action_type}: {explainAction.recommendations?.[0]?.reasoning || "Optimized based on remaining shelf-life & demand decay model."}
+                </p>
+                <div className="text-xs text-green-700 font-bold">
+                  Expected Impact: {formatINR(explainAction.recommendations?.[0]?.expected_outcome || explainAction.value_at_risk || 0)} waste prevented
+                </div>
+              </div>
             </div>
-          </section>
-        )}
-      </div>
-    </motion.div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-line">
+              <Button variant="outline" onClick={() => setExplainAction(null)}>
+                Close
+              </Button>
+              <Button
+                onClick={() => {
+                  const target = explainAction;
+                  setExplainAction(null);
+                  handleExecute(target);
+                }}
+              >
+                Execute Plan Now
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

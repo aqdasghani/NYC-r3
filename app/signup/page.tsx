@@ -3,10 +3,9 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Activity, Lock, Mail, User, ArrowRight, Store } from "lucide-react";
+import { Activity, Lock, User, ArrowRight, Store, Mail } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { register } from "@/lib/api-client";
-import { getDefaultRoute } from "@/lib/auth";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -23,17 +22,16 @@ export default function SignupPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
-
     try {
-      const data = await register({
-        name,
-        email,
-        password,
-        store_name: storeName,
-      });
-      router.push(getDefaultRoute(data.user.role));
-    } catch (err: any) {
-      setError(err?.message || "Registration failed. Please check your information and try again.");
+      await register({ name, email, password, store_name: storeName });
+      router.push("/dashboard");
+    } catch (err) {
+      // Surface the real failure (duplicate email, short password, backend down).
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : "Signup failed. Try a different email or a password of 6+ characters.";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -65,17 +63,6 @@ export default function SignupPage() {
           animate={{ opacity: 1, y: 0 }}
           className="glass-panel p-8 sm:p-10"
         >
-          {error && (
-            <div className="mb-6 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 text-sm flex items-start gap-3">
-              <svg className="w-5 h-5 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-              </svg>
-              <span>{error}</span>
-            </div>
-          )}
-
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
               <label htmlFor="name" className="block text-sm font-semibold text-text-primary mb-1.5">
@@ -161,6 +148,12 @@ export default function SignupPage() {
               </div>
             </div>
 
+            {error && (
+              <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+
             <div>
               <button
                 type="submit"
@@ -176,3 +169,4 @@ export default function SignupPage() {
     </div>
   );
 }
+

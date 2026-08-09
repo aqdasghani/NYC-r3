@@ -1,198 +1,236 @@
 from __future__ import annotations
 
+import math
 import uuid
-from datetime import date, timedelta
-from typing import Any, List
+from datetime import date, datetime
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.orm import Session, joinedload
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select, func
 
-from ..deps import get_current_user, get_db, require_roles
-from ..engines.forecast_engine import calculate_velocity, reorder_quantity, days_of_supply
-from ..models.database import InventoryBatch, Product, PurchaseOrder, PurchaseOrderItem, Sale, Supplier, User
-from ..models.schemas import PurchaseOrderCreate, PurchaseOrderOut, ReorderSuggestion
+from ..models.database import (
+    InventoryBatch,
+    Product,
+    PurchaseOrder,
+    PurchaseOrderItem,
+    Supplier,
+    User,
+)
+from ..deps import get_db, get_owner_manager, _store
+from ..engines.forecast_engine import calculate_velocity, stockout_eta, reorder_quantity
 
-router = APIRouter(prefix="/api/procurement", tags=["Procurement"])
+router = APIRouter(prefix="/api/procurement", tags=["procurement"])
 
 
-def _get_store(user: User) -> uuid.UUID:
-    if not user.store_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is not assigned to a store")
-    return user.store_id
+# --- Custom Schemas ---
+
+class ProcurementSummary(BaseModel):
+    active_pos: int
+    spend_mtd: float
+    delayed_deliveries: int
+
+class ProcurementSuggestion(BaseModel):
+    id: str  # For frontend list keys (can use product_id)
+    product_id: uuid.UUID
+    product: str
+    supplier: str
+    supplier_id: Optional[uuid.UUID]
+    suggestedQty: int
+    confidence: int
+    status: str
+
+class PurchaseOrderListOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    supplier: str
+    date: str
+    amount: str
+    status: str
+
+class PurchaseOrderItemRequest(BaseModel):
+    product_id: uuid.UUID
+    quantity: int = Field(gt=0)
+    unit_price: Optional[int] = None
 
 
-@router.post("/orders", response_model=PurchaseOrderOut, status_code=status.HTTP_201_CREATED)
-@router.post("/", response_model=PurchaseOrderOut, status_code=status.HTTP_201_CREATED)
-def create_purchase_order(
-    po_in: PurchaseOrderCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("OWNER", "MANAGER"))
-) -> Any:
-    """Create a new purchase order for the current user's store."""
-    store_id = _get_store(current_user)
+class PurchaseOrderCreateRequest(BaseModel):
+    supplier_id: uuid.UUID
+    expected_delivery: Optional[date] = None
+    items: list[PurchaseOrderItemRequest] = []
 
-    # Validate supplier exists and belongs to store
-    supplier = db.scalar(select(Supplier).where(Supplier.id == po_in.supplier_id, Supplier.store_id == store_id))
-    if not supplier:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Supplier not found in your store")
 
-    total_amount = po_in.total_amount or 0.0
+VALID_PO_STATUSES = {"Pending", "Processing", "In Transit", "Received", "Delivered", "Cancelled"}
+
+
+# --- Routes ---
+
+@router.get("/summary", response_model=ProcurementSummary)
+def get_summary(user: User = Depends(get_owner_manager), db=Depends(get_db)):
+    store_id = _store(user)
+    today = date.today()
+    first_of_month = today.replace(day=1)
+    
+    # Active POs (Pending or Processing)
+    active_pos = db.scalar(
+        select(func.count(PurchaseOrder.id))
+        .where(PurchaseOrder.store_id == store_id, PurchaseOrder.status.in_(["Pending", "Processing", "In Transit"]))
+    ) or 0
+    
+    # Delayed Deliveries (Pending/Processing/In Transit where expected_delivery < today)
+    delayed_deliveries = db.scalar(
+        select(func.count(PurchaseOrder.id))
+        .where(
+            PurchaseOrder.store_id == store_id,
+            PurchaseOrder.status.in_(["Pending", "Processing", "In Transit"]),
+            PurchaseOrder.expected_delivery < today
+        )
+    ) or 0
+
+    # Spend MTD
+    po_items = db.execute(
+        select(PurchaseOrderItem)
+        .join(PurchaseOrder)
+        .where(PurchaseOrder.store_id == store_id, PurchaseOrder.created_at >= first_of_month)
+    ).scalars().all()
+    
+    spend_mtd = sum((item.quantity * (item.unit_price or 0)) for item in po_items)
+
+    return ProcurementSummary(
+        active_pos=active_pos,
+        spend_mtd=float(spend_mtd),
+        delayed_deliveries=delayed_deliveries
+    )
+
+
+@router.get("/orders", response_model=list[PurchaseOrderListOut])
+def get_orders(user: User = Depends(get_owner_manager), db=Depends(get_db)):
+    store_id = _store(user)
+    
+    pos = db.execute(
+        select(PurchaseOrder)
+        .where(PurchaseOrder.store_id == store_id)
+        .order_by(PurchaseOrder.created_at.desc())
+        .limit(50)
+    ).scalars().all()
+    
+    result = []
+    for po in pos:
+        supplier = db.get(Supplier, po.supplier_id)
+        supplier_name = supplier.name if supplier else "Unknown Supplier"
+        
+        items = db.execute(select(PurchaseOrderItem).where(PurchaseOrderItem.purchase_order_id == po.id)).scalars().all()
+        amount = sum((item.quantity * (item.unit_price or 0)) for item in items)
+        
+        created_date = po.created_at.date()
+        today = date.today()
+        if created_date == today:
+            date_str = "Today"
+        elif (today - created_date).days == 1:
+            date_str = "Yesterday"
+        else:
+            date_str = created_date.strftime("%b %d")
+            
+        result.append(PurchaseOrderListOut(
+            id=f"PO-{po.created_at.year}-{str(po.id)[:6].upper()}",
+            supplier=supplier_name,
+            date=date_str,
+            amount=f"₹{amount:,.0f}",
+            status=po.status
+        ))
+        
+    return result
+
+
+@router.get("/suggestions", response_model=list[ProcurementSuggestion])
+def get_suggestions(user: User = Depends(get_owner_manager), db=Depends(get_db)):
+    store_id = _store(user)
+    products = db.scalars(select(Product).where(Product.store_id == store_id)).all()
+    
+    result = []
+    for p in products:
+        batches = db.scalars(select(InventoryBatch).where(InventoryBatch.product_id == p.id, InventoryBatch.quantity > 0)).all()
+        qty = sum(b.quantity for b in batches)
+        velocity = calculate_velocity(db, store_id, p.id)
+        eta = stockout_eta(qty, velocity)
+        
+        if eta <= max(7, p.lead_time_days + 2) or qty == 0:
+            suggested_qty = reorder_quantity(qty, velocity, p.lead_time_days)
+            if suggested_qty > 0:
+                supplier = db.get(Supplier, p.supplier_id) if p.supplier_id else None
+                supplier_name = supplier.name if supplier else "Unknown Supplier"
+                
+                confidence = max(50, min(99, 100 - int(eta * 3) if math.isfinite(eta) else 50))
+                
+                pending_po_item = db.execute(
+                    select(PurchaseOrderItem)
+                    .join(PurchaseOrder)
+                    .where(
+                        PurchaseOrderItem.product_id == p.id,
+                        PurchaseOrder.store_id == store_id,
+                        PurchaseOrder.status.in_(["Pending", "Processing", "In Transit"])
+                    )
+                ).scalars().first()
+                
+                status = "Approved" if pending_po_item else "Pending"
+                
+                result.append(ProcurementSuggestion(
+                    id=str(p.id),
+                    product_id=p.id,
+                    product=p.name,
+                    supplier=supplier_name,
+                    supplier_id=supplier.id if supplier else None,
+                    suggestedQty=suggested_qty,
+                    confidence=confidence,
+                    status=status
+                ))
+    
+    return sorted(result, key=lambda x: x.confidence, reverse=True)
+
+
+@router.post("/orders")
+def create_order(payload: PurchaseOrderCreateRequest, user: User = Depends(get_owner_manager), db=Depends(get_db)):
+    store_id = _store(user)
+
+    supplier = db.get(Supplier, payload.supplier_id)
+    if not supplier or supplier.store_id != store_id:
+        raise HTTPException(status_code=404, detail="Supplier not found")
 
     po = PurchaseOrder(
         store_id=store_id,
-        supplier_id=po_in.supplier_id,
-        status=po_in.status or "DRAFT",
-        total_amount=total_amount,
-        expected_delivery_date=po_in.expected_delivery_date,
+        supplier_id=payload.supplier_id,
+        status="Pending",
+        expected_delivery=payload.expected_delivery
     )
     db.add(po)
     db.flush()
 
-    computed_total = 0.0
-    for item in po_in.items:
-        product = db.scalar(select(Product).where(Product.id == item.product_id, Product.store_id == store_id))
-        if not product:
-            db.rollback()
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Product {item.product_id} not found in store")
-        
-        unit_price = item.unit_price if item.unit_price is not None else (product.purchase_price or 0.0)
-        computed_total += float(unit_price) * item.quantity
-
+    for item in payload.items:
+        product = db.get(Product, item.product_id)
+        if not product or product.store_id != store_id:
+            raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found in this store")
+        unit_price = item.unit_price if item.unit_price is not None else int(product.purchase_price or 0)
         po_item = PurchaseOrderItem(
-            po_id=po.id,
+            purchase_order_id=po.id,
             product_id=item.product_id,
             quantity=item.quantity,
-            unit_price=unit_price,
-            received_quantity=item.received_quantity or 0,
+            unit_price=unit_price
         )
         db.add(po_item)
 
-    if not po_in.total_amount:
-        po.total_amount = computed_total
-
     db.commit()
-    db.refresh(po)
-    return po
+    return {"message": "Purchase order created", "id": po.id}
 
 
-@router.get("/orders", response_model=List[PurchaseOrderOut])
-@router.get("/", response_model=List[PurchaseOrderOut])
-def get_purchase_orders(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-) -> Any:
-    """Get all purchase orders for current user's store."""
-    store_id = _get_store(current_user)
-    pos = db.scalars(
-        select(PurchaseOrder)
-        .options(joinedload(PurchaseOrder.items))
-        .where(PurchaseOrder.store_id == store_id)
-        .order_by(PurchaseOrder.created_at.desc())
-    ).unique().all()
-    return pos
+@router.patch("/orders/{order_id}")
+def update_order_status(order_id: uuid.UUID, status: str = Query(...), user: User = Depends(get_owner_manager), db=Depends(get_db)):
+    if status not in VALID_PO_STATUSES:
+        raise HTTPException(status_code=422, detail=f"Invalid status {status!r}. Allowed: {', '.join(sorted(VALID_PO_STATUSES))}")
+    store_id = _store(user)
+    po = db.get(PurchaseOrder, order_id)
+    if not po or po.store_id != store_id:
+        raise HTTPException(status_code=404, detail="Purchase Order not found")
 
-
-@router.get("/orders/{po_id}", response_model=PurchaseOrderOut)
-def get_purchase_order(
-    po_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-) -> Any:
-    """Get a single purchase order by ID."""
-    store_id = _get_store(current_user)
-    po = db.scalar(
-        select(PurchaseOrder)
-        .options(joinedload(PurchaseOrder.items))
-        .where(PurchaseOrder.id == po_id, PurchaseOrder.store_id == store_id)
-    )
-    if not po:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Purchase order not found")
-    return po
-
-
-@router.get("/suggestions", response_model=List[ReorderSuggestion])
-def get_reorder_suggestions(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-) -> Any:
-    """Calculate low-stock reorder suggestions for store products."""
-    store_id = _get_store(current_user)
-    products = db.scalars(select(Product).where(Product.store_id == store_id)).all()
-    
-    cutoff = date.today() - timedelta(days=30)
-    sales = db.scalars(
-        select(Sale).where(Sale.store_id == store_id, Sale.sale_date >= cutoff)
-    ).all()
-
-    batches = db.scalars(
-        select(InventoryBatch).where(InventoryBatch.store_id == store_id)
-    ).all()
-
-    stock_map: dict[uuid.UUID, int] = {}
-    for b in batches:
-        stock_map[b.product_id] = stock_map.get(b.product_id, 0) + b.quantity
-
-    suggestions = []
-    for p in products:
-        current_qty = stock_map.get(p.id, 0)
-        p_sales = [s for s in sales if s.product_id == p.id]
-        velocity = calculate_velocity(p_sales, days=30)
-        
-        # Check stockout condition or low inventory
-        days_left = days_of_supply(current_qty, velocity)
-        if current_qty < (velocity * p.lead_time_days * 1.5) or days_left < p.lead_time_days * 2 or current_qty == 0:
-            suggested_qty = reorder_quantity(velocity, p.lead_time_days, current_qty)
-            if suggested_qty > 0 or current_qty == 0:
-                suggestions.append(
-                    ReorderSuggestion(
-                        product_id=p.id,
-                        name=p.name,
-                        current_qty=current_qty,
-                        velocity=round(velocity, 2),
-                        lead_time_days=p.lead_time_days,
-                        suggested_qty=max(10, suggested_qty),
-                        stockout_eta=round(days_left, 1) if days_left < 999 else None,
-                    )
-                )
-
-    return suggestions
-
-
-@router.post("/orders/{po_id}/receive", response_model=PurchaseOrderOut)
-def receive_purchase_order(
-    po_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("OWNER", "MANAGER"))
-) -> Any:
-    """Mark a purchase order as received and update inventory atomically."""
-    store_id = _get_store(current_user)
-    po = db.scalar(
-        select(PurchaseOrder)
-        .options(joinedload(PurchaseOrder.items))
-        .where(PurchaseOrder.id == po_id, PurchaseOrder.store_id == store_id)
-    )
-    if not po:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Purchase Order not found")
-    if po.status == "RECEIVED":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Purchase Order already received")
-
-    for item in po.items:
-        product = db.scalar(select(Product).where(Product.id == item.product_id))
-        item.received_quantity = item.quantity
-        
-        batch = InventoryBatch(
-            product_id=item.product_id,
-            store_id=store_id,
-            batch_number=f"PO-{po.id.hex[:6].upper()}",
-            quantity=item.quantity,
-            expiry_date=date.today() + timedelta(days=180),
-            purchase_price=item.unit_price or (product.purchase_price if product else 0.0),
-            received_date=date.today(),
-        )
-        db.add(batch)
-
-    po.status = "RECEIVED"
+    po.status = status
     db.commit()
-    db.refresh(po)
-    return po
+    return {"message": f"Purchase order status updated to {status}"}

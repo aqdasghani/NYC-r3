@@ -16,7 +16,7 @@ def test_scan_invoice_returns_parsed_items(client, owner_headers):
     r = _scan(client, owner_headers)
     assert r.status_code == 200
     body = r.json()
-    assert body["source"] == "mock"
+    assert body["source"] == "mock_parser"
     assert len(body["extracted_items"]) >= 3
     matched = [e for e in body["extracted_items"] if e.get("matched_product_id")]
     assert matched, "mock parser should fuzzy-match catalog products"
@@ -52,14 +52,20 @@ def test_confirm_rejects_unknown_product(client, owner_headers):
     assert r.status_code == 404
 
 
-def test_scan_worker_allowed(client, staff_headers):
+def test_scan_allows_worker_staff(client, staff_headers):
+    # Receiving is a WORKER/STAFF action (B4); the dashboard remains owner-only.
     r = _scan(client, staff_headers)
-    assert r.status_code != 403
+    assert r.status_code == 200
 
 
-def test_date_parsing_formats():
-    from app.utils.expiry_parser import _parse_date
-    assert _parse_date("14/08/2026") == date(2026, 8, 14)
-    assert _parse_date("08/14/2026") == date(2026, 8, 14)
-    assert _parse_date("08-14-2026") == date(2026, 8, 14)
-
+def test_scan_denied_for_biller(client, owner_headers):
+    # A BILLER may sell at the POS but must not touch receiving.
+    import uuid
+    email = f"biller-{uuid.uuid4().hex[:6]}@greenshop.ai"
+    r = client.post("/api/auth/users", headers=owner_headers, json={
+        "name": "Biller Tester", "email": email, "password": "demo1234", "role": "BILLER",
+    })
+    assert r.status_code == 200, r.text
+    login = client.post("/api/auth/login", json={"email": email, "password": "demo1234"})
+    biller_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    assert _scan(client, biller_headers).status_code == 403

@@ -1,256 +1,293 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { CheckCircle2, AlertTriangle, Package, Archive, Clock, XCircle, TrendingDown, TrendingUp, RefreshCw } from "lucide-react";
-import { formatINR } from "@/lib/utils";
+import React, { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { PackageSearch, Clock, Plus, RefreshCw, CheckCircle2 } from "lucide-react";
+import { getInventory, getKPIs, getStockHealth } from "@/lib/api";
 import { apiFetch } from "@/lib/api-client";
+import { subscribeLive } from "@/lib/live";
+import type { InventoryItem, KPI, StockHealthSegment } from "@/lib/types";
+import { formatINR } from "@/lib/utils";
+import { Button, Card, CardHeader, DataTable, type Column, KpiCard, StatusBadge } from "@/components/ui";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-interface IntelligenceMetrics {
-  count: number;
-  value: number;
+const STATUS_LABELS: Record<string, string> = {
+  CRITICAL: "Critical (0-3d)",
+  WARNING: "Warning (4-15d)",
+  UPCOMING: "Upcoming (16-30d)",
+  SAFE: "Safe (30d+)",
+  DEAD_STOCK: "Dead Stock",
+  OVERSTOCK: "Overstock",
+};
+
+interface ReorderRow {
+  product_name?: string;
+  current_stock?: number;
+  velocity_per_day?: number;
+  days_until_stockout?: number;
+  suggested_order_qty?: number;
+  [key: string]: unknown;
 }
 
-interface IntelligenceData {
-  healthy: IntelligenceMetrics;
-  low_stock: IntelligenceMetrics;
-  overstock: IntelligenceMetrics;
-  dead_stock: IntelligenceMetrics;
-  near_expiry: IntelligenceMetrics;
-  expired: IntelligenceMetrics;
-}
+export default function InventoryPage() {
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [kpis, setKpis] = useState<KPI[]>([]);
+  const [stockHealth, setStockHealth] = useState<StockHealthSegment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+  const [atRisk, setAtRisk] = useState<any[]>([]);
+  const [deadStockData, setDeadStockData] = useState<any[]>([]);
+  const [reorderSuggestions, setReorderSuggestions] = useState<ReorderRow[]>([]);
+  const [intelligenceLoading, setIntelligenceLoading] = useState(true);
 
-interface SlowMover {
-  product_name: string;
-  category: string;
-  stock: number;
-  value: number;
-  velocity: number;
-  days_of_inventory: number;
-}
+  async function fetchWithAuth(path: string) {
+    try {
+      return await apiFetch<any>(path);
+    } catch {
+      return [];
+    }
+  }
 
-interface FastMover {
-  product_name: string;
-  category: string;
-  stock: number;
-  velocity: number;
-  revenue_14d: number;
-}
+  const load = async () => {
+    setLoading(true);
+    const [inv, kpiData, health] = await Promise.all([getInventory(), getKPIs(), getStockHealth()]);
+    setInventory(inv);
+    setKpis(kpiData);
+    setStockHealth(health);
+    setLoading(false);
 
-export default function InventoryDashboard() {
-  const [intel, setIntel] = useState<IntelligenceData | null>(null);
-  const [slowMovers, setSlowMovers] = useState<SlowMover[]>([]);
-  const [fastMovers, setFastMovers] = useState<FastMover[]>([]);
-  
-  const [loadingIntel, setLoadingIntel] = useState(true);
-  const [loadingSlow, setLoadingSlow] = useState(true);
-  const [loadingFast, setLoadingFast] = useState(true);
-
-  const loadData = async () => {
-    setLoadingIntel(true);
-    setLoadingSlow(true);
-    setLoadingFast(true);
-
-    apiFetch<IntelligenceData>("/api/inventory/intelligence")
-      .then(data => setIntel(data.healthy ? data : null))
-      .catch(() => setIntel(null))
-      .finally(() => setLoadingIntel(false));
-
-    apiFetch<SlowMover[]>("/api/inventory/slow-movers")
-      .then(data => setSlowMovers(Array.isArray(data) ? data : []))
-      .catch(() => setSlowMovers([]))
-      .finally(() => setLoadingSlow(false));
-
-    apiFetch<FastMover[]>("/api/inventory/fast-movers")
-      .then(data => setFastMovers(Array.isArray(data) ? data : []))
-      .catch(() => setFastMovers([]))
-      .finally(() => setLoadingFast(false));
+    setIntelligenceLoading(true);
+    try {
+      const [ar, ds, rs] = await Promise.all([
+        fetchWithAuth("/api/inventory/at-risk"),
+        fetchWithAuth("/api/inventory/dead-stock"),
+        fetchWithAuth("/api/inventory/reorder-suggestions"),
+      ]);
+      setAtRisk(ar.items || ar || []);
+      setDeadStockData(ds.items || ds || []);
+      setReorderSuggestions(rs.items || rs || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIntelligenceLoading(false);
+    }
   };
 
-
   useEffect(() => {
-    loadData();
+    void load();
+    const unsub = subscribeLive((event) => {
+      if (event.type === "inventory_updated") void load();
+    });
+    return unsub;
   }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return inventory;
+    return inventory.filter((item) => item.product.name.toLowerCase().includes(q));
+  }, [inventory, query]);
+
+  const kpiValue = (id: string) => kpis.find((k) => k.id === id)?.value ?? 0;
+  const criticalCount = inventory.filter((i) => i.product.status === "CRITICAL").length;
+  const deadStock = stockHealth.find((s) => s.name === "Dead Stock")?.value ?? 0;
+  const totalQty = inventory.reduce((sum, i) => sum + i.batch.qty, 0);
+
+  const stats = [
+    { label: "At-Risk Batches", value: String(inventory.length) },
+    { label: "Units at Risk", value: totalQty.toLocaleString("en-IN") },
+    { label: "Value at Risk", value: formatINR(kpiValue("at_risk")) },
+    { label: "Critical Expiry", value: String(criticalCount) },
+    { label: "Dead Stock", value: String(deadStock) },
+  ];
+
+  const nearExpiryCount = atRisk.filter((i) => i.days_remaining >= 0 && i.days_remaining <= 15).length;
+  const expiredCount = atRisk.filter((i) => i.days_remaining < 0).length;
+  const healthyStockCount = inventory.length - nearExpiryCount - expiredCount - deadStockData.length;
+  const overstockCount = inventory.filter((i) => i.product.status === "OVERSTOCK").length;
+  const lowStockCount = inventory.filter((i) => (i.product.velocityPerDay * 7) >= i.batch.qty).length;
+
+  const healthCards = [
+    { label: "Healthy Stock", value: Math.max(0, healthyStockCount), tone: "text-brand" as const },
+    { label: "Low Stock", value: lowStockCount, tone: "text-warning" as const },
+    { label: "Near Expiry", value: nearExpiryCount, tone: "text-warning" as const },
+    { label: "Overstock", value: overstockCount, tone: "text-info" as const },
+    { label: "Dead Stock", value: deadStockData.length, tone: "text-muted" as const },
+    { label: "Expired", value: expiredCount, tone: "text-danger" as const },
+  ];
+
+  const columns: Column<InventoryItem>[] = [
+    {
+      key: "product",
+      header: "Product",
+      sortValue: (r) => r.product.name,
+      render: (r) => (
+        <div>
+          <div className="font-medium text-ink">{r.product.name}</div>
+          <div className="text-xs text-muted">
+            Batch: {r.batch.batchCode || "—"} · {r.product.sku || "No SKU"}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "stock",
+      header: "Stock / Velocity",
+      align: "right",
+      sortValue: (r) => r.batch.qty,
+      render: (r) => (
+        <div>
+          <div className="text-ink">{r.batch.qty} units</div>
+          <div className="text-xs text-muted">{r.product.velocityPerDay.toFixed(1)}/day</div>
+        </div>
+      ),
+    },
+    {
+      key: "expiry",
+      header: "Expiry",
+      align: "right",
+      sortValue: (r) => r.expiryDays,
+      render: (r) => (
+        <div className="flex items-center justify-end gap-1">
+          <Clock className="h-3 w-3 text-muted" />
+          <span className={r.expiryDays <= 3 ? "text-danger" : r.expiryDays <= 15 ? "text-warning" : "text-dim"}>
+            {r.expiryDays}d · {r.batch.expiryDate}
+          </span>
+        </div>
+      ),
+    },
+    {
+      key: "risk",
+      header: "Risk Value",
+      align: "right",
+      sortValue: (r) => r.riskValue,
+      render: (r) => <span className="font-medium text-ink">{r.riskValue ? formatINR(r.riskValue) : "—"}</span>,
+    },
+    {
+      key: "status",
+      header: "Status",
+      sortValue: (r) => r.product.status,
+      render: (r) => (
+        <StatusBadge status={r.product.status} label={STATUS_LABELS[r.product.status] ?? undefined} />
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-6 pb-12">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Inventory Dashboard</h1>
-          <p className="text-slate-500 text-sm mt-1">Real-time stock intelligence and movement analysis.</p>
+          <h1 className="text-xl font-semibold tracking-tight text-ink">Inventory & Expiry</h1>
+          <p className="mt-1 text-sm text-muted">Stock expiring within 15 days, flagged by the detection engine.</p>
         </div>
-        <button onClick={loadData} className="glass-panel px-4 py-2 hover:bg-slate-50 transition-colors flex items-center gap-2 text-sm font-semibold text-slate-700">
-          <RefreshCw className="w-4 h-4" /> Refresh
-        </button>
+        <Link
+          href="/dashboard/scanner"
+          className="inline-flex h-9 items-center gap-2 rounded-md bg-brand px-4 text-sm font-medium text-white transition-colors hover:bg-brand-strong"
+        >
+          <Plus className="h-4 w-4" /> Add via Receiving
+        </Link>
       </div>
 
-      {/* Intelligence Section */}
-      <div>
-        <h2 className="text-lg font-bold text-slate-800 mb-4">Stock Intelligence</h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {/* Healthy */}
-          <div className="glass-panel p-4 flex flex-col justify-between border-t-2 border-t-emerald-500">
-            <div className="flex items-center gap-2 mb-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-              <div className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Healthy</div>
-            </div>
-            {loadingIntel ? <div className="h-10 bg-slate-100 animate-pulse rounded" /> : (
-              <div>
-                <div className="text-2xl font-bold text-slate-900">{intel?.healthy?.count ?? 0}</div>
-                <div className="text-xs text-slate-500 font-medium">{formatINR(intel?.healthy?.value ?? 0)} value</div>
-              </div>
-            )}
+      {/* Health grid */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+        {healthCards.map((c) => (
+          <div key={c.label} className="rounded-lg border border-line bg-surface p-4 shadow-card">
+            <div className="text-[11px] font-medium uppercase tracking-wider text-muted">{c.label}</div>
+            <div className={`mt-2 text-2xl font-semibold ${c.tone}`}>{c.value}</div>
           </div>
-          
-          {/* Low Stock */}
-          <div className="glass-panel p-4 flex flex-col justify-between border-t-2 border-t-amber-500">
-            <div className="flex items-center gap-2 mb-2">
-              <AlertTriangle className="w-4 h-4 text-amber-500" />
-              <div className="text-xs font-semibold text-amber-700 uppercase tracking-wider">Low Stock</div>
-            </div>
-            {loadingIntel ? <div className="h-10 bg-slate-100 animate-pulse rounded" /> : (
-              <div>
-                <div className="text-2xl font-bold text-slate-900">{intel?.low_stock?.count ?? 0}</div>
-                <div className="text-xs text-slate-500 font-medium">{formatINR(intel?.low_stock?.value ?? 0)} value</div>
-              </div>
-            )}
-          </div>
-
-          {/* Overstock */}
-          <div className="glass-panel p-4 flex flex-col justify-between border-t-2 border-t-blue-500">
-            <div className="flex items-center gap-2 mb-2">
-              <Package className="w-4 h-4 text-blue-500" />
-              <div className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Overstock</div>
-            </div>
-            {loadingIntel ? <div className="h-10 bg-slate-100 animate-pulse rounded" /> : (
-              <div>
-                <div className="text-2xl font-bold text-slate-900">{intel?.overstock?.count ?? 0}</div>
-                <div className="text-xs text-slate-500 font-medium">{formatINR(intel?.overstock?.value ?? 0)} value</div>
-              </div>
-            )}
-          </div>
-
-          {/* Dead Stock */}
-          <div className="glass-panel p-4 flex flex-col justify-between border-t-2 border-t-slate-500">
-            <div className="flex items-center gap-2 mb-2">
-              <Archive className="w-4 h-4 text-slate-500" />
-              <div className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Dead Stock</div>
-            </div>
-            {loadingIntel ? <div className="h-10 bg-slate-100 animate-pulse rounded" /> : (
-              <div>
-                <div className="text-2xl font-bold text-slate-900">{intel?.dead_stock?.count ?? 0}</div>
-                <div className="text-xs text-slate-500 font-medium">{formatINR(intel?.dead_stock?.value ?? 0)} value</div>
-              </div>
-            )}
-          </div>
-
-          {/* Near Expiry */}
-          <div className="glass-panel p-4 flex flex-col justify-between border-t-2 border-t-orange-500">
-            <div className="flex items-center gap-2 mb-2">
-              <Clock className="w-4 h-4 text-orange-500" />
-              <div className="text-xs font-semibold text-orange-700 uppercase tracking-wider">Near Expiry</div>
-            </div>
-            {loadingIntel ? <div className="h-10 bg-slate-100 animate-pulse rounded" /> : (
-              <div>
-                <div className="text-2xl font-bold text-slate-900">{intel?.near_expiry?.count ?? 0}</div>
-                <div className="text-xs text-slate-500 font-medium">{formatINR(intel?.near_expiry?.value ?? 0)} value</div>
-              </div>
-            )}
-          </div>
-
-          {/* Expired */}
-          <div className="glass-panel p-4 flex flex-col justify-between border-t-2 border-t-red-500">
-            <div className="flex items-center gap-2 mb-2">
-              <XCircle className="w-4 h-4 text-red-500" />
-              <div className="text-xs font-semibold text-red-700 uppercase tracking-wider">Expired</div>
-            </div>
-            {loadingIntel ? <div className="h-10 bg-slate-100 animate-pulse rounded" /> : (
-              <div>
-                <div className="text-2xl font-bold text-slate-900">{intel?.expired?.count ?? 0}</div>
-                <div className="text-xs text-slate-500 font-medium">{formatINR(intel?.expired?.value ?? 0)} value</div>
-              </div>
-            )}
-          </div>
-        </div>
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Fast Movers Table */}
-        <div className="glass-panel flex flex-col overflow-hidden">
-          <div className="p-4 border-b border-slate-100 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-emerald-500" />
-            <h2 className="text-lg font-bold text-slate-800">Fast Movers</h2>
+      {/* Reorder suggestions */}
+      <Card noPadding>
+        <CardHeader title="Reorder Suggestions" className="border-b border-line px-4 py-3" />
+        {intelligenceLoading ? (
+          <div className="py-8 text-center text-sm text-muted">Loading suggestions…</div>
+        ) : reorderSuggestions.length === 0 ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-sm font-medium text-brand">
+            <CheckCircle2 className="h-4 w-4" /> All products are well-stocked
           </div>
-          <div className="flex-1 overflow-x-auto">
-            {loadingFast ? (
-              <div className="p-8 flex justify-center"><div className="animate-spin w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full" /></div>
-            ) : fastMovers.length === 0 ? (
-              <div className="p-8 text-center text-slate-500">No fast movers data available.</div>
-            ) : (
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 text-slate-500">
-                  <tr>
-                    <th className="p-3 font-semibold">Product</th>
-                    <th className="p-3 font-semibold">Category</th>
-                    <th className="p-3 font-semibold text-right">Stock</th>
-                    <th className="p-3 font-semibold text-right">Velocity</th>
-                    <th className="p-3 font-semibold text-right">Rev (14d)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {fastMovers.map((m, i) => (
-                    <tr key={i} className="hover:bg-slate-50">
-                      <td className="p-3 font-medium text-slate-900">{m.product_name}</td>
-                      <td className="p-3 text-slate-500">{m.category || '—'}</td>
-                      <td className="p-3 text-right">{m.stock}</td>
-                      <td className="p-3 text-right">{m.velocity.toFixed(1)}/d</td>
-                      <td className="p-3 text-right font-medium">{formatINR(m.revenue_14d)}</td>
-                    </tr>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-left">
+              <thead>
+                <tr className="border-b border-line bg-elevated">
+                  {["Product", "Stock", "Velocity", "Days Until Stockout", "Suggested Order Qty"].map((h) => (
+                    <th key={h} className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                      {h}
+                    </th>
                   ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-
-        {/* Slow Movers Table */}
-        <div className="glass-panel flex flex-col overflow-hidden">
-          <div className="p-4 border-b border-slate-100 flex items-center gap-2">
-            <TrendingDown className="w-5 h-5 text-amber-500" />
-            <h2 className="text-lg font-bold text-slate-800">Slow Movers</h2>
-          </div>
-          <div className="flex-1 overflow-x-auto">
-            {loadingSlow ? (
-              <div className="p-8 flex justify-center"><div className="animate-spin w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full" /></div>
-            ) : slowMovers.length === 0 ? (
-              <div className="p-8 text-center text-slate-500">No slow movers data available.</div>
-            ) : (
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 text-slate-500">
-                  <tr>
-                    <th className="p-3 font-semibold">Product</th>
-                    <th className="p-3 font-semibold">Category</th>
-                    <th className="p-3 font-semibold text-right">Stock</th>
-                    <th className="p-3 font-semibold text-right">Velocity</th>
-                    <th className="p-3 font-semibold text-right">Days Inv</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line-subtle">
+                {reorderSuggestions.map((item, idx) => (
+                  <tr key={idx} className="transition-colors hover:bg-subtle/70">
+                    <td className="px-4 py-3 font-medium text-ink">{item.product_name}</td>
+                    <td className="px-4 py-3 text-dim">{item.current_stock}</td>
+                    <td className="px-4 py-3 text-dim">{item.velocity_per_day}</td>
+                    <td className="px-4 py-3 text-dim">{item.days_until_stockout}</td>
+                    <td className="px-4 py-3 font-medium text-brand">{item.suggested_order_qty}</td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {slowMovers.map((m, i) => (
-                    <tr key={i} className="hover:bg-slate-50">
-                      <td className="p-3 font-medium text-slate-900">{m.product_name}</td>
-                      <td className="p-3 text-slate-500">{m.category || '—'}</td>
-                      <td className="p-3 text-right">{m.stock}</td>
-                      <td className="p-3 text-right">{m.velocity.toFixed(2)}/d</td>
-                      <td className="p-3 text-right font-medium text-amber-600">{m.days_of_inventory}d</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
+        )}
+      </Card>
+
+      {/* Stats row */}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+        {stats.map((stat, i) => (
+          <KpiCard key={i} label={stat.label} value={stat.value} />
+        ))}
       </div>
+
+      {/* Toolbar */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search at-risk products by name or batch…"
+            className="h-9 w-full rounded-md border border-line bg-surface pl-3 pr-4 text-sm text-ink placeholder:text-faint transition-colors focus:border-brand focus:ring-2 focus:ring-brand/20 focus:outline-none"
+          />
+        </div>
+        <Button variant="outline" onClick={() => void load()} title="Refresh" aria-label="Refresh">
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+        </Button>
+      </div>
+
+      {/* Table */}
+      <DataTable<InventoryItem>
+        columns={columns}
+        rows={filtered}
+        rowKey={(r) => r.id}
+        loading={loading}
+        emptyState={
+          <div className="py-8 text-center text-sm text-muted">
+            {query ? "No matches for that search." : "No stock expiring soon — all clear!"}
+          </div>
+        }
+        rowActions={(r) => (
+          <Link href="/dashboard/actions" className="text-sm font-medium text-brand hover:underline">
+            {r.aiKind ? "Action" : "View"}
+          </Link>
+        )}
+      />
+
+      {/* Bottom hint */}
+      <Card className="flex items-start gap-3 p-4">
+        <PackageSearch className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
+        <p className="text-sm leading-relaxed text-dim">
+          Showing stock expiring within 15 days. The AI detection engine rescans every few minutes —
+          run a scan from the{" "}
+          <Link href="/dashboard/actions" className="font-medium text-brand hover:underline">AI Action Engine</Link>{" "}
+          to refresh recommendations, and use{" "}
+          <Link href="/dashboard/scanner" className="font-medium text-brand hover:underline">Smart Receiving</Link>{" "}
+          to add new stock.
+        </p>
+      </Card>
     </div>
   );
 }

@@ -1,0 +1,859 @@
+
+> Green Quant-ai@0.1.0 dev
+> next dev
+
+▲ Next.js 16.3.0 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.56.1:3000
+- Environments: .env.local
+✓ Ready in 752ms
+⚠ Warning: Next.js ignored package-lock.json in C:\Users\sbhrn because it is outside the current Git repository (C:\Users\sbhrn\.gemini\antigravity\scratch\greenshop-ai).
+ To use this directory, set `turbopack.root` in your Next.js config.
+
+✓ Running next.config.ts took 53ms
+
+ GET / 200 in 569ms (next.js: 235ms, application-code: 334ms)
+ GET /login 200 in 801ms (next.js: 730ms, application-code: 71ms)
+ GET /dashboard 200 in 233ms (next.js: 36ms, application-code: 198ms)
+ GET / 200 in 97ms (next.js: 8ms, application-code: 89ms)
+ GET / 200 in 77ms (next.js: 6ms, application-code: 70ms)
+ GET / 200 in 113ms (next.js: 9ms, application-code: 104ms)
+ GET /dashboard 200 in 122ms (next.js: 21ms, application-code: 100ms)
+ GET /dashboard 200 in 67ms (next.js: 7ms, application-code: 60ms)
+ GET /dashboard 200 in 134ms (next.js: 36ms, application-code: 98ms)
+ GET /dashboard 200 in 69ms (next.js: 7ms, application-code: 62ms)
+ GET /dashboard/inventory 200 in 220ms (next.js: 113ms, application-code: 107ms)
+ GET / 500 in 2.6s (next.js: 1817ms, application-code: 768ms)
+ GET / 500 in 34ms (next.js: 19ms, application-code: 15ms)
+[browser] Uncaught Error: ./lib/api.ts:821:17
+Error: Expected ';', '}' or <eof>
+  819 |   });
+  820 | } ["product_catalog", "stock_coverage"],
+> 821 |       confidence: 85,
+      |                 ^
+  822 |       data_quality: "MEDIUM",
+  823 |       fallback_used: false,
+  824 |       model_used: "Green Quant Pure-Math Engine",
+
+Parsing ecmascript source code failed
+
+Import traces:
+  #1 [Client Component Browser]:
+    ./lib/api.ts [Client Component Browser]
+    ./components/ai/AiChatbotModal.tsx [Client Component Browser]
+    ./components/ai/AiChatbotModal.tsx [Server Component]
+    ./app/dashboard/layout.tsx [Server Component]
+
+  #2 [Client Component Browser]:
+    ./lib/api.ts [Client Component Browser]
+    ./lib/hooks/useDashboardData.ts [Client Component Browser]
+    ./app/dashboard/page.tsx [Client Component Browser]
+    ./app/dashboard/page.tsx [Server Component]
+
+  #3 [Client Component SSR]:
+    ./lib/api.ts [Client Component SSR]
+    ./components/ai/AiChatbotModal.tsx [Client Component SSR]
+    ./components/ai/AiChatbotModal.tsx [Server Component]
+    ./app/dashboard/layout.tsx [Server Component]
+
+  #4 [Client Component SSR]:
+    ./lib/api.ts [Client Component SSR]
+    ./lib/hooks/useDashboardData.ts [Client Component SSR]
+    ./app/dashboard/page.tsx [Client Component SSR]
+    ./app/dashboard/page.tsx [Server Component]
+
+
+    at <unknown> (Error: ./lib/api.ts:821:17)
+    at <unknown> (Error: (./lib/api.ts:821:17)
+[browser] ./lib/api.ts:821:17
+Error: Expected ';', '}' or <eof>
+  819 |   });
+  820 | } ["product_catalog", "stock_coverage"],
+> 821 |       confidence: 85,
+      |                 ^
+  822 |       data_quality: "MEDIUM",
+  823 |       fallback_used: false,
+  824 |       model_used: "Green Quant Pure-Math Engine",
+
+Parsing ecmascript source code failed
+
+Import traces:
+  #1 [Client Component Browser]:
+    ./lib/api.ts [Client Component Browser]
+    ./components/ai/AiChatbotModal.tsx [Client Component Browser]
+    ./components/ai/AiChatbotModal.tsx [Server Component]
+    ./app/dashboard/layout.tsx [Server Component]
+
+  #2 [Client Component Browser]:
+    ./lib/api.ts [Client Component Browser]
+    ./lib/hooks/useDashboardData.ts [Client Component Browser]
+    ./app/dashboard/page.tsx [Client Component Browser]
+    ./app/dashboard/page.tsx [Server Component]
+
+  #3 [Client Component SSR]:
+    ./lib/api.ts [Client Component SSR]
+    ./components/ai/AiChatbotModal.tsx [Client Component SSR]
+    ./components/ai/AiChatbotModal.tsx [Server Component]
+    ./app/dashboard/layout.tsx [Server Component]
+
+  #4 [Client Component SSR]:
+    ./lib/api.ts [Client Component SSR]
+    ./lib/hooks/useDashboardData.ts [Client Component SSR]
+    ./app/dashboard/page.tsx [Client Component SSR]
+    ./app/dashboard/page.tsx [Server Component] 
+[browser] ./lib/api.ts:821:17
+Error: Expected ';', '}' or <eof>
+  819 |   });
+  820 | } ["product_catalog", "stock_coverage"],
+> 821 |       confidence: 85,
+      |                 ^
+  822 |       data_quality: "MEDIUM",
+  823 |       fallback_used: false,
+  824 |       model_used: "Green Quant Pure-Math Engine",
+
+Parsing ecmascript source code failed
+
+Import traces:
+  #1 [Client Component Browser]:
+    ./lib/api.ts [Client Component Browser]
+    ./components/ai/AiChatbotModal.tsx [Client Component Browser]
+    ./components/ai/AiChatbotModal.tsx [Server Component]
+    ./app/dashboard/layout.tsx [Server Component]
+
+  #2 [Client Component Browser]:
+    ./lib/api.ts [Client Component Browser]
+    ./lib/hooks/useDashboardData.ts [Client Component Browser]
+    ./app/dashboard/page.tsx [Client Component Browser]
+    ./app/dashboard/page.tsx [Server Component]
+
+  #3 [Client Component SSR]:
+    ./lib/api.ts [Client Component SSR]
+    ./components/ai/AiChatbotModal.tsx [Client Component SSR]
+    ./components/ai/AiChatbotModal.tsx [Server Component]
+    ./app/dashboard/layout.tsx [Server Component]
+
+  #4 [Client Component SSR]:
+    ./lib/api.ts [Client Component SSR]
+    ./lib/hooks/useDashboardData.ts [Client Component SSR]
+    ./app/dashboard/page.tsx [Client Component SSR]
+    ./app/dashboard/page.tsx [Server Component] 
+[browser] ./lib/api.ts:821:17
+Error: Expected ';', '}' or <eof>
+  819 |   });
+  820 | } ["product_catalog", "stock_coverage"],
+> 821 |       confidence: 85,
+      |                 ^
+  822 |       data_quality: "MEDIUM",
+  823 |       fallback_used: false,
+  824 |       model_used: "Green Quant Pure-Math Engine",
+
+Parsing ecmascript source code failed
+
+Import traces:
+  #1 [Client Component Browser]:
+    ./lib/api.ts [Client Component Browser]
+    ./components/ai/AiChatbotModal.tsx [Client Component Browser]
+    ./components/ai/AiChatbotModal.tsx [Server Component]
+    ./app/dashboard/layout.tsx [Server Component]
+
+  #2 [Client Component Browser]:
+    ./lib/api.ts [Client Component Browser]
+    ./lib/hooks/useDashboardData.ts [Client Component Browser]
+    ./app/dashboard/page.tsx [Client Component Browser]
+    ./app/dashboard/page.tsx [Server Component]
+
+  #3 [Client Component SSR]:
+    ./lib/api.ts [Client Component SSR]
+    ./components/ai/AiChatbotModal.tsx [Client Component SSR]
+    ./components/ai/AiChatbotModal.tsx [Server Component]
+    ./app/dashboard/layout.tsx [Server Component]
+
+  #4 [Client Component SSR]:
+    ./lib/api.ts [Client Component SSR]
+    ./lib/hooks/useDashboardData.ts [Client Component SSR]
+    ./app/dashboard/page.tsx [Client Component SSR]
+    ./app/dashboard/page.tsx [Server Component] 
+[browser] ./lib/api.ts:821:17
+Error: Expected ';', '}' or <eof>
+  819 |   });
+  820 | } ["product_catalog", "stock_coverage"],
+> 821 |       confidence: 85,
+      |                 ^
+  822 |       data_quality: "MEDIUM",
+  823 |       fallback_used: false,
+  824 |       model_used: "Green Quant Pure-Math Engine",
+
+Parsing ecmascript source code failed
+
+Import traces:
+  #1 [Client Component Browser]:
+    ./lib/api.ts [Client Component Browser]
+    ./app/dashboard/inventory/page.tsx [Client Component Browser]
+    ./app/dashboard/inventory/page.tsx [Server Component]
+
+  #2 [Client Component SSR]:
+    ./lib/api.ts [Client Component SSR]
+    ./app/dashboard/inventory/page.tsx [Client Component SSR]
+    ./app/dashboard/inventory/page.tsx [Server Component]
+
+  #3 [Client Component Browser]:
+    ./lib/api.ts [Client Component Browser]
+    ./components/ai/AiChatbotModal.tsx [Client Component Browser]
+    ./components/ai/AiChatbotModal.tsx [Server Component]
+    ./app/dashboard/layout.tsx [Server Component]
+
+  #4 [Client Component SSR]:
+    ./lib/api.ts [Client Component SSR]
+    ./components/ai/AiChatbotModal.tsx [Client Component SSR]
+    ./components/ai/AiChatbotModal.tsx [Server Component]
+    ./app/dashboard/layout.tsx [Server Component] 
+[browser] ./lib/api.ts:821:17
+Error: Expected ';', '}' or <eof>
+  819 |   });
+  820 | } ["product_catalog", "stock_coverage"],
+> 821 |       confidence: 85,
+      |                 ^
+  822 |       data_quality: "MEDIUM",
+  823 |       fallback_used: false,
+  824 |       model_used: "Green Quant Pure-Math Engine",
+
+Parsing ecmascript source code failed
+
+Import traces:
+  #1 [Client Component Browser]:
+    ./lib/api.ts [Client Component Browser]
+    ./components/ai/AiChatbotModal.tsx [Client Component Browser]
+    ./components/ai/AiChatbotModal.tsx [Server Component]
+    ./app/dashboard/layout.tsx [Server Component]
+
+  #2 [Client Component Browser]:
+    ./lib/api.ts [Client Component Browser]
+    ./lib/hooks/useDashboardData.ts [Client Component Browser]
+    ./app/dashboard/page.tsx [Client Component Browser]
+    ./app/dashboard/page.tsx [Server Component]
+
+  #3 [Client Component SSR]:
+    ./lib/api.ts [Client Component SSR]
+    ./components/ai/AiChatbotModal.tsx [Client Component SSR]
+    ./components/ai/AiChatbotModal.tsx [Server Component]
+    ./app/dashboard/layout.tsx [Server Component]
+
+  #4 [Client Component SSR]:
+    ./lib/api.ts [Client Component SSR]
+    ./lib/hooks/useDashboardData.ts [Client Component SSR]
+    ./app/dashboard/page.tsx [Client Component SSR]
+    ./app/dashboard/page.tsx [Server Component] 
+[browser] ./lib/api.ts:821:17
+Error: Expected ';', '}' or <eof>
+  819 |   });
+  820 | } ["product_catalog", "stock_coverage"],
+> 821 |       confidence: 85,
+      |                 ^
+  822 |       data_quality: "MEDIUM",
+  823 |       fallback_used: false,
+  824 |       model_used: "Green Quant Pure-Math Engine",
+
+Parsing ecmascript source code failed
+
+Import traces:
+  #1 [Client Component Browser]:
+    ./lib/api.ts [Client Component Browser]
+    ./components/ai/AiChatbotModal.tsx [Client Component Browser]
+    ./components/ai/AiChatbotModal.tsx [Server Component]
+    ./app/dashboard/layout.tsx [Server Component]
+
+  #2 [Client Component Browser]:
+    ./lib/api.ts [Client Component Browser]
+    ./lib/hooks/useDashboardData.ts [Client Component Browser]
+    ./app/dashboard/page.tsx [Client Component Browser]
+    ./app/dashboard/page.tsx [Server Component]
+
+  #3 [Client Component SSR]:
+    ./lib/api.ts [Client Component SSR]
+    ./components/ai/AiChatbotModal.tsx [Client Component SSR]
+    ./components/ai/AiChatbotModal.tsx [Server Component]
+    ./app/dashboard/layout.tsx [Server Component]
+
+  #4 [Client Component SSR]:
+    ./lib/api.ts [Client Component SSR]
+    ./lib/hooks/useDashboardData.ts [Client Component SSR]
+    ./app/dashboard/page.tsx [Client Component SSR]
+    ./app/dashboard/page.tsx [Server Component] 
+ GET / 200 in 288ms (next.js: 67ms, application-code: 222ms)
+ GET /signup 200 in 354ms (next.js: 264ms, application-code: 90ms)
+ GET /dashboard 200 in 404ms (next.js: 342ms, application-code: 62ms)
+ GET /dashboard/pos 200 in 157ms (next.js: 119ms, application-code: 38ms)
+ GET /dashboard 200 in 25ms (next.js: 8ms, application-code: 17ms)
+ GET /dashboard/pos 200 in 27ms (next.js: 7ms, application-code: 21ms)
+ GET /dashboard/inventory 200 in 80ms (next.js: 46ms, application-code: 34ms)
+[browser] Error: HTTP 401
+    at fetchWithAuth (app/dashboard/inventory/page.tsx:49:24)
+    at async load (app/dashboard/inventory/page.tsx:63:28)
+  47 |       headers: token ? { Authorization: `Bearer ${token}` } : {},
+  48 |     });
+> 49 |     if (!res.ok) throw new Error(`HTTP ${res.status}`);
+     |                        ^
+  50 |     return res.json();
+  51 |   }
+  52 | (app/dashboard/inventory/page.tsx:72:15)
+ GET /dashboard/products 200 in 146ms (next.js: 122ms, application-code: 24ms)
+[browser] Uncaught Error: Objects are not valid as a React child (found: object with keys {label, onClick}). If you meant to render a collection of children, use an array instead.
+    at ProductsPage (app/dashboard/products/page.tsx:238:13)
+  236 |           loading={loading}
+  237 |           emptyState={
+> 238 |             <EmptyState
+      |             ^
+  239 |               icon={<Package className="h-12 w-12 text-brand/50" />}
+  240 |               title="No products found"
+  241 |               description="Scan a barcode using your webcam or click Add Product to register inventory into the database."
+ GET /dashboard/products 200 in 591ms (next.js: 25ms, application-code: 565ms)
+Failed to proxy http://127.0.0.1:8000/api/inventory/products?page=1&page_size=100 Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+✓ Compiled in 487ms
+ GET /dashboard/products 200 in 53ms (next.js: 20ms, application-code: 33ms)
+Failed to proxy http://127.0.0.1:8000/api/inventory/products?page=1&page_size=100 Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+✓ Compiled in 249ms
+ GET /dashboard/products 200 in 43ms (next.js: 16ms, application-code: 27ms)
+Failed to proxy http://127.0.0.1:8000/api/inventory/products?page=1&page_size=100 Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+✓ Compiled in 273ms
+ GET /dashboard/products 200 in 53ms (next.js: 16ms, application-code: 37ms)
+Failed to proxy http://127.0.0.1:8000/api/inventory/products?page=1&page_size=100 Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+✓ Compiled in 797ms
+ GET /dashboard/products 200 in 49ms (next.js: 12ms, application-code: 37ms)
+Failed to proxy http://127.0.0.1:8000/api/inventory/barcode/9300633929169 Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+ GET /dashboard/inventory 200 in 467ms (next.js: 432ms, application-code: 35ms)
+ GET /dashboard/inventory 200 in 49ms (next.js: 10ms, application-code: 39ms)
+✓ Compiled in 639ms
+Failed to proxy http://127.0.0.1:8000/api/inventory/at-risk Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Failed to proxy http://127.0.0.1:8000/api/analytics/dashboard Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Failed to proxy http://127.0.0.1:8000/api/inventory/stock-health Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+[browser] TypeError: Failed to fetch
+    at a (chrome-extension://jnjnledlnjnkfgepmadpfdljbmdhcihi/pages/content/netmeter-patcher.js:13:5562)
+    at fetchWithAuth (app/dashboard/inventory/page.tsx:46:23)
+    at load (app/dashboard/inventory/page.tsx:64:9)
+  44 |     const raw = localStorage.getItem("Green Quant_auth");
+  45 |     const token = raw ? JSON.parse(raw)?.token : null;
+> 46 |     const res = await fetch(`${API_URL}${path}`, {
+     |                       ^
+  47 |       headers: token ? { Authorization: `Bearer ${token}` } : {},
+  48 |     });
+  49 |     if (!res.ok) throw new Error(`HTTP ${res.status}`); (app/dashboard/inventory/page.tsx:72:15)
+ GET /dashboard/sales 200 in 149ms (next.js: 123ms, application-code: 26ms)
+ GET /dashboard/procurement 200 in 207ms (next.js: 161ms, application-code: 46ms)
+ GET /dashboard/suppliers 200 in 221ms (next.js: 174ms, application-code: 46ms)
+ GET /dashboard/transfers 200 in 155ms (next.js: 119ms, application-code: 36ms)
+ GET /dashboard/scanner 200 in 709ms (next.js: 679ms, application-code: 30ms)
+ GET /dashboard/returns 200 in 171ms (next.js: 131ms, application-code: 40ms)
+ GET /dashboard/briefing 200 in 155ms (next.js: 114ms, application-code: 41ms)
+ GET /dashboard/intelligence 200 in 164ms (next.js: 125ms, application-code: 39ms)
+Failed to proxy http://127.0.0.1:8000/api/ai/insights Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Failed to proxy http://127.0.0.1:8000/api/ai/heatmap Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Failed to proxy http://127.0.0.1:8000/api/ai/matrix Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Failed to proxy http://127.0.0.1:8000/api/ai/associations Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+ GET /dashboard/reports 200 in 157ms (next.js: 117ms, application-code: 39ms)
+ GET /dashboard/sustainability 200 in 182ms (next.js: 136ms, application-code: 45ms)
+Failed to proxy http://127.0.0.1:8000/api/green-score/current Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Failed to proxy http://127.0.0.1:8000/api/green-score/history?days=30 Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Failed to proxy http://127.0.0.1:8000/api/analytics/waste-prevented?days=30 Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+ GET /dashboard/alerts 200 in 459ms (next.js: 417ms, application-code: 42ms)
+Failed to proxy http://127.0.0.1:8000/api/actions?status=PENDING Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+ GET /dashboard 200 in 27ms (next.js: 9ms, application-code: 19ms)
+Failed to proxy http://127.0.0.1:8000/api/health Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Failed to proxy http://127.0.0.1:8000/api/analytics/dashboard Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Failed to proxy http://127.0.0.1:8000/api/analytics/dashboard Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+✓ Compiled in 495ms
+ GET /dashboard 200 in 42ms (next.js: 13ms, application-code: 28ms)
+ GET /dashboard 200 in 93ms (next.js: 21ms, application-code: 72ms)
+Failed to proxy http://127.0.0.1:8000/api/health Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Failed to proxy http://127.0.0.1:8000/api/analytics/dashboard Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Failed to proxy http://127.0.0.1:8000/api/analytics/dashboard Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Failed to proxy http://127.0.0.1:8000/api/ai/copilot Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+ GET /dashboard 200 in 142ms (next.js: 31ms, application-code: 110ms)
+Failed to proxy http://127.0.0.1:8000/api/health Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Failed to proxy http://127.0.0.1:8000/api/analytics/dashboard Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Failed to proxy http://127.0.0.1:8000/api/analytics/dashboard Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+ GET /dashboard/pos 200 in 45ms (next.js: 20ms, application-code: 25ms)
+ GET /dashboard/products 200 in 51ms (next.js: 20ms, application-code: 31ms)
+Failed to proxy http://127.0.0.1:8000/api/inventory/products?page=1&page_size=100 Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+ GET /dashboard/inventory 200 in 46ms (next.js: 20ms, application-code: 26ms)
+Failed to proxy http://127.0.0.1:8000/api/inventory/at-risk Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Failed to proxy http://127.0.0.1:8000/api/analytics/dashboard Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Failed to proxy http://127.0.0.1:8000/api/inventory/stock-health Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8000) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8000
+}
+ GET /dashboard/sales 200 in 40ms (next.js: 15ms, application-code: 25ms)
+ GET /dashboard/procurement 200 in 39ms (next.js: 13ms, application-code: 26ms)
+[browser] TypeError: Failed to fetch
+    at a (chrome-extension://jnjnledlnjnkfgepmadpfdljbmdhcihi/pages/content/netmeter-patcher.js:13:5562)
+    at fetchWithAuth (app/dashboard/inventory/page.tsx:46:23)
+    at load (app/dashboard/inventory/page.tsx:64:9)
+  44 |     const raw = localStorage.getItem("Green Quant_auth");
+  45 |     const token = raw ? JSON.parse(raw)?.token : null;
+> 46 |     const res = await fetch(`${API_URL}${path}`, {
+     |                       ^
+  47 |       headers: token ? { Authorization: `Bearer ${token}` } : {},
+  48 |     });
+  49 |     if (!res.ok) throw new Error(`HTTP ${res.status}`); (app/dashboard/inventory/page.tsx:72:15)
+ GET /dashboard/procurement 200 in 27ms (next.js: 7ms, application-code: 20ms)
+⚠ Found a change in next.config.ts. Restarting the server to apply the changes...
+▲ Next.js 16.3.0 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.56.1:3000
+- Environments: .env.local
+✓ Ready in 501ms
+⚠ Warning: Next.js ignored package-lock.json in C:\Users\sbhrn because it is outside the current Git repository (C:\Users\sbhrn\.gemini\antigravity\scratch\greenshop-ai).
+ To use this directory, set `turbopack.root` in your Next.js config.
+
+✓ Running next.config.ts took 42ms
+`destination` does not start with `/`, `http://`, or `https://` for route {"source":"/ws/:path*","destination":"ws://127.0.0.1:8000/ws/:path*"}
+
+
+Error: Invalid rewrite found
+[?25h

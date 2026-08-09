@@ -1,11 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Briefcase, ShoppingBag, AlertTriangle, XCircle, Leaf,
   TrendingUp, Bell, ArrowRightLeft, ShoppingCart, Users, ChevronRight, Package,
-  Sparkles, RefreshCw, PlugZap,
+  RefreshCw, PlugZap, Lightbulb,
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -14,6 +14,8 @@ import {
 import { useDashboardData } from "@/lib/hooks/useDashboardData";
 import type { Risk } from "@/lib/types";
 import { formatINR, formatCompactINR } from "@/lib/utils";
+import { Card, CardHeader, KpiCard } from "@/components/ui";
+import { chartColors, axisProps, gridProps, ChartTooltip, formatINRAxis } from "@/components/ui/chart-theme";
 
 const INSIGHT_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   Package,
@@ -21,63 +23,58 @@ const INSIGHT_ICONS: Record<string, React.ComponentType<{ className?: string }>>
   Leaf,
 };
 
-const TIMELINE_COLORS = ["#EF4444", "#F59E0B", "#FCD34D", "#34D399", "#0FA958"];
+const TIMELINE_COLORS = ["#b3261e", "#a16207", "#d9a441", "#0fa958", "#157347"];
 
-function MetricCard({
-  title, value, sub, subColor, icon: Icon, iconBg, iconColor,
-}: {
-  title: string; value: string; sub: string; subColor: string;
-  icon: React.ComponentType<{ className?: string }>; iconBg: string; iconColor: string;
-}) {
-  return (
-    <div className="glass-panel p-4 flex flex-col justify-between">
-      <div className="flex items-center gap-3 mb-3">
-        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${iconBg}`}>
-          <Icon className={`w-5 h-5 ${iconColor}`} />
-        </div>
-        <div>
-          <div className="text-xs font-semibold text-slate-500">{title}</div>
-        </div>
-      </div>
-      <div>
-        <div className="text-2xl font-bold text-slate-900 mb-1">{value}</div>
-        <div className={`text-xs font-medium ${subColor}`}>{sub}</div>
-      </div>
-    </div>
-  );
-}
+type Tone = "danger" | "warning" | "info" | "success";
+
+const TONE: Record<Tone, { chip: string; title: string; link: string; border: string }> = {
+  danger: {
+    chip: "bg-danger-soft text-danger",
+    title: "text-danger",
+    link: "border-danger/25 bg-danger-soft text-danger hover:bg-danger/10",
+    border: "border-t-danger/40",
+  },
+  warning: {
+    chip: "bg-warning-soft text-warning",
+    title: "text-warning",
+    link: "border-warning/25 bg-warning-soft text-warning hover:bg-warning/10",
+    border: "border-t-warning/40",
+  },
+  info: {
+    chip: "bg-info-soft text-info",
+    title: "text-info",
+    link: "border-info/25 bg-info-soft text-info hover:bg-info/10",
+    border: "border-t-info/40",
+  },
+  success: {
+    chip: "bg-brand-soft text-brand-strong",
+    title: "text-brand-strong",
+    link: "border-brand/25 bg-brand-soft text-brand-strong hover:bg-brand-soft",
+    border: "border-t-brand/40",
+  },
+};
 
 function UrgentActionCard({ risk }: { risk: Risk }) {
-  const color =
-    risk.priority === "TRANSFER"
-      ? "text-blue-500 bg-blue-50"
-      : risk.priority === "REORDER"
-        ? "text-green-600 bg-green-50"
-        : risk.priority === "URGENT"
-          ? "text-red-500 bg-red-50"
-          : "text-orange-500 bg-orange-50";
-  const btn =
-    risk.priority === "TRANSFER"
-      ? "bg-blue-500"
-      : risk.priority === "REORDER"
-        ? "bg-green-600"
-        : risk.priority === "URGENT"
-          ? "bg-red-500"
-          : "bg-orange-500";
+  const tone: Tone =
+    risk.priority === "URGENT" ? "danger"
+    : risk.priority === "ACTION" ? "warning"
+    : risk.priority === "REORDER" ? "info"
+    : "success";
+  const t = TONE[tone];
   return (
-    <div className="glass-panel p-3 flex justify-between items-center border border-slate-100 hover:border-slate-200 transition-colors">
-      <div className="flex items-start gap-3">
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${color}`}>
-          <Bell className="w-4 h-4" />
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface p-3 shadow-card transition-colors hover:border-line-strong">
+      <div className="flex min-w-0 items-start gap-3">
+        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${t.chip}`}>
+          <Bell className="h-4 w-4" />
         </div>
-        <div>
-          <h4 className="text-xs font-bold text-slate-800">{risk.productName} — {risk.tag.toLowerCase()}</h4>
-          <p className="text-[11px] text-slate-500 mt-0.5">{risk.reason}</p>
+        <div className="min-w-0">
+          <h4 className="truncate text-xs font-semibold text-ink">{risk.productName} · {risk.tag.toLowerCase()}</h4>
+          <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-muted">{risk.reason}</p>
         </div>
       </div>
       <Link
         href="/dashboard/actions"
-        className={`text-[10px] font-bold text-white px-3 py-1.5 rounded whitespace-nowrap ${btn} hover:opacity-90 transition-opacity`}
+        className="shrink-0 whitespace-nowrap rounded-md border px-3 py-1.5 text-[11px] font-semibold transition-colors"
       >
         Take Action
       </Link>
@@ -86,21 +83,37 @@ function UrgentActionCard({ risk }: { risk: Risk }) {
 }
 
 export default function DashboardPage() {
-  const { kpis, priorities, summary, loading, offline, reload } = useDashboardData();
+  const { priorities, summary, loading, offline, reload } = useDashboardData();
+  const [userName, setUserName] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const authData = localStorage.getItem("greenshop_auth") || localStorage.getItem("Green Quant_auth");
+      if (authData) {
+        const parsed = JSON.parse(authData);
+        if (parsed?.user?.name) setUserName(parsed.user.name.split(" ")[0]);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   if (loading || !summary) {
     return (
       <div className="space-y-6 pb-12">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-slate-800">Loading live dashboard…</h2>
-          <RefreshCw className="w-5 h-5 text-slate-400 animate-spin" />
+          <h2 className="text-lg font-semibold text-ink">Loading live dashboard…</h2>
+          <RefreshCw className="h-5 w-5 animate-spin text-muted" />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="glass-panel p-4 h-28 animate-pulse bg-slate-100" />
+            <div key={i} className="h-28 animate-pulse rounded-lg border border-line bg-subtle" />
           ))}
         </div>
-        <div className="glass-panel p-5 h-64 animate-pulse bg-slate-100" />
+        <div className="h-64 animate-pulse rounded-lg border border-line bg-subtle" />
       </div>
     );
   }
@@ -108,7 +121,7 @@ export default function DashboardPage() {
   const k = summary.kpis;
   const donut = summary.donut;
   const totalProducts = k.product_count || 1;
-  const trend = (summary.sales_trend || []).map((p) => ({ name: p.date ? p.date.slice(5) : "", value: p.revenue }));
+  const trend = summary.sales_trend.map((p) => ({ name: p.date.slice(5), value: p.revenue }));
   const timeline = summary.expiry_timeline;
   const maxTimelineItems = Math.max(1, ...timeline.map((t) => t.items));
   const ai = summary.ai_priority;
@@ -117,203 +130,171 @@ export default function DashboardPage() {
   const mini = summary.mini_kpis;
 
   const topMetrics = [
-    { title: "Today's Revenue", value: k.today_revenue ? formatINR(k.today_revenue) : "₹0", sub: "Today", subColor: "text-slate-500", icon: TrendingUp, iconBg: "bg-green-100", iconColor: "text-green-600" },
-    { title: "Today's Orders", value: k.today_orders?.toString() || "0", sub: "Transactions", subColor: "text-slate-500", icon: ShoppingCart, iconBg: "bg-blue-100", iconColor: "text-blue-600" },
-    { title: "Units Sold", value: k.today_units?.toString() || "0", sub: "Items sold today", subColor: "text-slate-500", icon: Package, iconBg: "bg-indigo-100", iconColor: "text-indigo-600" },
-    { title: "Inventory Value", value: formatCompactINR(k.inventory_value), sub: `↑ ${k.inventory_value_delta_pct}% vs last month`, subColor: "text-green-600", icon: Briefcase, iconBg: "bg-green-100", iconColor: "text-green-600" },
-    { title: "At Risk", value: formatINR(k.at_risk_value), sub: `${k.at_risk_count} Items near expiry`, subColor: "text-orange-600", icon: AlertTriangle, iconBg: "bg-orange-100", iconColor: "text-orange-500" },
-    { title: "Waste Prevented", value: formatINR(k.waste_prevented_mtd), sub: "This month", subColor: "text-slate-500", icon: Leaf, iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
+    { label: "Total Inventory Value", value: formatCompactINR(k.inventory_value), delta: k.inventory_value_delta_pct, sub: k.inventory_value_delta_pct != null ? "vs last month" : "Live inventory", icon: <Briefcase className="h-4 w-4" /> },
+    { label: "Total Products", value: k.product_count.toLocaleString("en-IN"), delta: k.product_count_delta_pct, sub: k.product_count_delta_pct != null ? "vs last month" : "Registered products", icon: <ShoppingBag className="h-4 w-4" /> },
+    { label: "At Risk (Near Expiry)", value: `${k.at_risk_count} Items`, sub: `${formatINR(k.at_risk_value)} value at risk`, icon: <AlertTriangle className="h-4 w-4" /> },
+    { label: "Expired Items", value: `${k.expired_count} Items`, sub: `${formatINR(k.expired_value)} loss`, icon: <XCircle className="h-4 w-4" /> },
+    { label: "Waste Prevented", value: formatINR(k.waste_prevented_mtd), sub: "This month", icon: <Leaf className="h-4 w-4" /> },
   ];
 
-  const priorityCards = [
-    { title: "Sell First", count: `${ai.sell_first.products} Products`, impact: "Potential loss", val: formatINR(ai.sell_first.value), color: "red", icon: AlertTriangle },
-    { title: "Discount", count: `${ai.discount.products} Products`, impact: "Potential recovery", val: formatINR(ai.discount.value), color: "orange", icon: TrendingUp },
-    { title: "Transfer", count: `${ai.transfer.units} Units`, impact: "Value to transfer", val: ai.transfer.value ? formatINR(ai.transfer.value) : "", color: "blue", icon: ArrowRightLeft },
-    { title: "Reorder", count: `${ai.reorder.products} Products`, impact: "Prevent stockout", val: "", color: "green", icon: ShoppingCart },
+  const priorityCards: Array<{ title: string; count: string; impact: string; val: string; tone: Tone; icon: React.ComponentType<{ className?: string }> }> = [
+    { title: "Sell First", count: `${ai.sell_first.products} Products`, impact: "Potential loss", val: formatINR(ai.sell_first.value), tone: "danger", icon: AlertTriangle },
+    { title: "Discount", count: `${ai.discount.products} Products`, impact: "Potential recovery", val: formatINR(ai.discount.value), tone: "warning", icon: TrendingUp },
+    { title: "Transfer", count: `${ai.transfer.units} Units`, impact: "Value to transfer", val: ai.transfer.value ? formatINR(ai.transfer.value) : "", tone: "info", icon: ArrowRightLeft },
+    { title: "Reorder", count: `${ai.reorder.products} Products`, impact: "Prevent stockout", val: "", tone: "success", icon: ShoppingCart },
   ];
 
   const miniCards = [
-    { label: "Suppliers", val: String(mini.suppliers), sub: "Active Suppliers", icon: Users, color: "text-blue-500", bg: "bg-blue-50" },
-    { label: "Purchase Orders", val: String(mini.purchase_orders), sub: "Pending Orders", icon: ShoppingCart, color: "text-orange-500", bg: "bg-orange-50" },
-    { label: "GRN Pending", val: String(mini.grn_pending), sub: "Needs Approval", icon: Package, color: "text-red-500", bg: "bg-red-50" },
-    { label: "Avg. Gross Margin", val: `${mini.avg_gross_margin}%`, sub: "This Month", icon: TrendingUp, color: "text-green-500", bg: "bg-green-50" },
+    { label: "Suppliers", val: String(mini.suppliers), sub: "Active Suppliers", icon: Users },
+    { label: "Purchase Orders", val: String(mini.purchase_orders), sub: "Pending Orders", icon: ShoppingCart },
+    { label: "GRN Pending", val: String(mini.grn_pending), sub: "Needs Approval", icon: Package },
+    { label: "Avg. Gross Margin", val: `${mini.avg_gross_margin}%`, sub: "This Month", icon: TrendingUp },
   ];
 
   return (
     <div className="space-y-6 pb-12">
       {offline && (
-        <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <div className="flex items-center gap-2 text-sm font-medium text-amber-800">
-            <PlugZap className="w-4 h-4" />
-            Backend offline — showing demo data
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-warning/30 bg-warning-soft px-4 py-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-warning">
+            <PlugZap className="h-4 w-4" />
+            Backend offline — dashboard data unavailable. Retry when server is running.
           </div>
           <button
             onClick={reload}
-            className="text-xs font-bold text-amber-800 border border-amber-300 rounded-lg px-3 py-1.5 hover:bg-amber-100 transition-colors"
+            className="rounded-md border border-warning/30 bg-surface px-3 py-1.5 text-xs font-semibold text-warning transition-colors hover:bg-warning/10"
           >
             Retry
           </button>
         </div>
       )}
 
-      {/* 1. Top Metrics Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
-        {topMetrics.map((metric, i) => (
-          <MetricCard key={i} {...metric} />
+      {/* Greeting */}
+      <div>
+        <h2 className="text-xl font-semibold tracking-tight text-ink">
+          {greeting}{userName ? `, ${userName}` : ""}.
+        </h2>
+        <p className="mt-0.5 text-sm text-muted">Here&apos;s what needs your attention at the store today.</p>
+      </div>
+
+      {/* 1. Top metrics */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        {topMetrics.map((m, i) => (
+          <KpiCard key={i} {...m} />
         ))}
       </div>
 
-      {/* 2. Middle Row: Charts & Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Inventory Overview (Donut) */}
-        <div className="glass-panel p-5 col-span-1">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-sm font-bold text-slate-800">Inventory Overview</h3>
-            <span className="text-xs text-slate-400">{donut.length} segments</span>
-          </div>
+      {/* 2. Middle row: charts + attention */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-1">
+          <CardHeader title="Inventory Overview" description="Stock health by segment" />
           <div className="flex items-center">
-            <div className="w-1/2 h-[180px] relative">
+            <div className="relative h-[180px] w-1/2">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie
-                    data={donut}
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={2}
-                    dataKey="value"
-                    stroke="none"
-                  >
+                  <Pie data={donut} innerRadius={58} outerRadius={80} paddingAngle={2} dataKey="value" stroke="none">
                     {donut.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
                 </PieChart>
               </ResponsiveContainer>
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <div className="text-xl font-bold text-slate-900">{k.product_count.toLocaleString("en-IN")}</div>
-                <div className="text-[10px] text-slate-500">Total Products</div>
+              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                <div className="text-xl font-semibold text-ink">{k.product_count.toLocaleString("en-IN")}</div>
+                <div className="text-[10px] text-muted">Total Products</div>
               </div>
             </div>
-            <div className="w-1/2 pl-2">
-              <ul className="space-y-2">
-                {donut.map((item, i) => (
-                  <li key={i} className="flex justify-between items-center text-xs">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
-                      <span className="text-slate-600 font-medium">{item.name}</span>
-                    </div>
-                    <div className="font-semibold text-slate-900">
-                      {item.value} <span className="text-slate-400 font-normal ml-1">({((item.value / totalProducts) * 100).toFixed(1)}%)</span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <ul className="w-1/2 space-y-2 pl-2">
+              {donut.map((item, i) => (
+                <li key={i} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="flex items-center gap-1.5 text-dim">
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
+                    <span className="truncate">{item.name}</span>
+                  </span>
+                  <span className="font-semibold text-ink">
+                    {item.value}
+                    <span className="ml-1 font-normal text-muted">({((item.value / totalProducts) * 100).toFixed(1)}%)</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
           </div>
-        </div>
+        </Card>
 
-        {/* Sales Trend (Line Chart) */}
-        <div className="glass-panel p-5 col-span-1">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-sm font-bold text-slate-800">Sales Trend</h3>
-            <span className="text-xs text-slate-400">Last 30 days</span>
-          </div>
+        <Card className="lg:col-span-1">
+          <CardHeader title="Sales Trend" description="Last 30 days" />
           <div className="h-[180px]">
             {trend.length ? (
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={trend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748B' }} dy={10} interval="preserveStartEnd" />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748B' }} tickFormatter={(val) => `₹${val / 1000}k`} />
-                  <Tooltip
-                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-                    itemStyle={{ color: '#0F172A', fontWeight: 'bold' }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="value"
-                    stroke="#0FA958"
-                    strokeWidth={3}
-                    dot={{ r: 4, fill: '#0FA958', strokeWidth: 2, stroke: '#fff' }}
-                    activeDot={{ r: 6, fill: '#0FA958', stroke: '#fff' }}
-                  />
+                <LineChart data={trend} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+                  <CartesianGrid {...gridProps} />
+                  <XAxis dataKey="name" {...axisProps} dy={8} interval="preserveStartEnd" />
+                  <YAxis {...axisProps} tickFormatter={formatINRAxis} />
+                  <Tooltip content={<ChartTooltip formatter={(v) => formatINR(v)} />} />
+                  <Line type="monotone" dataKey="value" name="Revenue" stroke={chartColors.brand} strokeWidth={2} dot={{ r: 2.5, fill: chartColors.brand, strokeWidth: 0 }} activeDot={{ r: 4 }} />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-full flex items-center justify-center text-sm text-slate-400">
-                No sales data yet
-              </div>
+              <div className="flex h-full items-center justify-center text-sm text-muted">No sales data yet</div>
             )}
           </div>
-        </div>
+        </Card>
 
-        {/* Urgent Actions */}
-        <div className="col-span-1 flex flex-col h-full">
-          <div className="flex justify-between items-center mb-3 px-1">
-            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-green-600" /> AI Urgent Actions
-            </h3>
-            <Link href="/dashboard/actions" className="text-xs font-semibold text-blue-600 hover:underline">View All</Link>
-          </div>
-          <div className="flex-1 space-y-3">
-            {priorities.length === 0 && (
-              <div className="glass-panel p-6 text-center text-sm text-slate-500">
-                No urgent actions — all clear!
-              </div>
+        <div className="lg:col-span-1">
+          <CardHeader title="Attention Required" actions={<Link href="/dashboard/actions" className="text-xs font-semibold text-info hover:underline">View All</Link>} />
+          <div className="space-y-3">
+            {priorities.length === 0 ? (
+              <Card className="flex flex-col items-center justify-center py-8 text-center">
+                <p className="text-sm text-muted">No urgent actions — all clear!</p>
+              </Card>
+            ) : (
+              priorities.slice(0, 4).map((risk) => <UrgentActionCard key={risk.id} risk={risk} />)
             )}
-            {priorities.slice(0, 4).map((risk) => (
-              <UrgentActionCard key={risk.id} risk={risk} />
-            ))}
           </div>
         </div>
       </div>
 
-      {/* 3. Bottom Row: AI Actions, Timeline & AI Briefing */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column (AI Actions + Timeline) */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* AI Priority Actions */}
+      {/* 3. Bottom row: actions, timeline, insights, briefing */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="space-y-4 lg:col-span-2">
           <div>
-            <h3 className="text-sm font-bold text-slate-800 mb-3 px-1">✨ AI Priority Actions</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {priorityCards.map((action, i) => (
-                <div key={i} className={`glass-panel p-4 flex flex-col justify-between border-t-4 border-t-${action.color}-500`}>
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className={`text-${action.color}-500 bg-${action.color}-50 p-1.5 rounded`}>
-                        <action.icon className="w-4 h-4" />
+            <h3 className="mb-3 text-sm font-semibold text-ink">Priority Actions</h3>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {priorityCards.map((action, i) => {
+                const t = TONE[action.tone];
+                return (
+                  <div key={i} className={`flex flex-col justify-between rounded-lg border border-t-2 border-line bg-surface p-4 shadow-card ${t.border}`}>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className={`flex h-7 w-7 items-center justify-center rounded-md ${t.chip}`}>
+                          <action.icon className="h-4 w-4" />
+                        </span>
+                        <h4 className={`text-sm font-semibold ${t.title}`}>{action.title}</h4>
                       </div>
-                      <h4 className={`text-sm font-bold text-${action.color}-600`}>{action.title}</h4>
+                      <div className="mt-3 text-sm font-semibold text-ink">{action.count}</div>
+                      <div className="mt-2">
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">{action.impact}</div>
+                        {action.val && <div className="text-lg font-semibold text-ink">{action.val}</div>}
+                      </div>
                     </div>
-                    <div className="text-sm font-semibold text-slate-800">{action.count}</div>
-
-                    <div className="mt-3 mb-4">
-                      <div className="text-[10px] text-slate-500 uppercase font-semibold">{action.impact}</div>
-                      {action.val && <div className="text-lg font-bold text-slate-900">{action.val}</div>}
-                    </div>
+                    <Link href="/dashboard/actions" className={`mt-4 rounded-md border py-1.5 text-center text-xs font-semibold transition-colors ${t.link}`}>
+                      View Details
+                    </Link>
                   </div>
-                  <Link
-                    href="/dashboard/actions"
-                    className={`w-full py-1.5 rounded border border-${action.color}-200 text-${action.color}-600 bg-${action.color}-50 hover:bg-${action.color}-100 text-xs font-semibold transition-colors text-center`}
-                  >
-                    View Details
-                  </Link>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
-          {/* Expiry Timeline */}
-          <div className="glass-panel p-5">
-            <h3 className="text-sm font-bold text-slate-800 mb-4">Expiry Timeline</h3>
+          <Card>
+            <CardHeader title="Expiry Timeline" description="Units expiring by bucket" />
             {timeline.length === 0 ? (
-              <div className="text-sm text-slate-400 py-6 text-center">No expiry data available</div>
+              <div className="py-6 text-center text-sm text-muted">No expiry data available</div>
             ) : (
               <div className="space-y-4">
                 {timeline.map((row, i) => (
                   <div key={i} className="flex items-center gap-4 text-xs font-medium">
-                    <div className="w-20 text-right text-slate-600 whitespace-nowrap">{row.label} Days</div>
-                    <div className="flex-1 bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                    <div className="w-24 shrink-0 text-right text-dim">{row.label} Days</div>
+                    <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-subtle">
                       <div
                         className="h-full rounded-full"
                         style={{
@@ -322,38 +303,36 @@ export default function DashboardPage() {
                         }}
                       />
                     </div>
-                    <div className="w-16 text-right text-slate-800">{row.items} items</div>
-                    <div className="w-20 text-right text-slate-500">{formatINR(row.value)}</div>
+                    <div className="w-16 shrink-0 text-right text-ink">{row.items} items</div>
+                    <div className="w-24 shrink-0 text-right text-muted">{formatINR(row.value)}</div>
                   </div>
                 ))}
               </div>
             )}
-          </div>
+          </Card>
         </div>
 
-        {/* Right Column (Insights + Briefing) */}
-        <div className="col-span-1 space-y-6">
-          {/* AI Insights */}
+        <div className="space-y-4">
           <div>
-            <div className="flex justify-between items-center mb-3 px-1">
-              <h3 className="text-sm font-bold text-slate-800">AI Insights</h3>
-              <span className="text-xs font-semibold text-slate-400">auto-detected</span>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-ink">Insights</h3>
+              <span className="text-xs text-muted">auto-detected</span>
             </div>
             <div className="space-y-3">
               {insights.length === 0 && (
-                <div className="glass-panel p-4 text-sm text-slate-500">No insights yet — the detection engine will surface them here.</div>
+                <Card className="p-4 text-sm text-muted">No insights yet — the detection engine will surface them here.</Card>
               )}
               {insights.map((insight, i) => {
-                const Icon = INSIGHT_ICONS[insight.icon] ?? Sparkles;
+                const Icon = INSIGHT_ICONS[insight.icon] ?? Lightbulb;
                 return (
-                  <div key={i} className="glass-panel p-4">
+                  <div key={i} className="rounded-lg border border-line bg-surface p-4 shadow-card">
                     <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-green-100 text-green-600">
-                        <Icon className="w-4 h-4" />
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-soft text-brand-strong">
+                        <Icon className="h-4 w-4" />
                       </div>
                       <div>
-                        <h4 className="text-xs font-bold text-slate-800 capitalize">{insight.title.replace(/_/g, " ").toLowerCase()}</h4>
-                        <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">{insight.detail}</p>
+                        <h4 className="text-xs font-semibold text-ink capitalize">{insight.title.replace(/_/g, " ").toLowerCase()}</h4>
+                        <p className="mt-1 text-[11px] leading-relaxed text-muted">{insight.detail}</p>
                       </div>
                     </div>
                   </div>
@@ -362,40 +341,35 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Today's AI Briefing */}
-          <div className="bg-[#063120] rounded-xl p-5 border border-[#0A412A] text-white relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-[#0FA958] rounded-full blur-3xl opacity-20 transform translate-x-1/2 -translate-y-1/2" />
-            <div className="flex items-center gap-2 mb-3 relative z-10">
-              <div className="w-8 h-8 bg-[#0FA958] rounded-full flex items-center justify-center">
-                <Leaf className="w-4 h-4 text-white" />
+          <div className="rounded-lg border border-line bg-surface p-4 shadow-card">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-brand-soft">
+                <Leaf className="h-4 w-4 text-brand" />
               </div>
-              <h3 className="font-bold text-sm">Today's AI Briefing</h3>
+              <h3 className="text-sm font-semibold text-ink">Today&apos;s Briefing</h3>
             </div>
-            <div className="space-y-1 mb-4 relative z-10">
-              <p className="text-xs text-slate-300">You have {brief.important_actions} important actions today</p>
-              <p className="text-[13px] font-semibold text-white">Est. impact: {formatINR(brief.est_impact)} can be saved</p>
+            <div className="mt-3 space-y-1.5">
+              <p className="text-xs text-muted">You have {brief.important_actions} important actions today</p>
+              <p className="text-sm font-semibold text-ink">Est. impact: <span className="text-brand-strong">{formatINR(brief.est_impact)}</span> can be saved</p>
             </div>
-            <Link
-              href="/dashboard/actions"
-              className="w-full py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2 relative z-10"
-            >
-              View Briefing <ChevronRight className="w-4 h-4" />
+            <Link href="/dashboard/actions" className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-md border border-line bg-elevated py-2 text-xs font-semibold text-dim transition-colors hover:bg-subtle hover:text-ink">
+              View Briefing <ChevronRight className="h-3.5 w-3.5" />
             </Link>
           </div>
         </div>
       </div>
 
-      {/* 4. Bottom Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* 4. Bottom stats */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {miniCards.map((stat, i) => (
-          <div key={i} className="glass-panel p-4 flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${stat.bg}`}>
-              <stat.icon className={`w-5 h-5 ${stat.color}`} />
+          <div key={i} className="flex items-center gap-3 rounded-lg border border-line bg-surface p-4 shadow-card">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-subtle text-dim">
+              <stat.icon className="h-5 w-5" />
             </div>
-            <div>
-              <div className="text-[10px] text-slate-500 font-semibold uppercase">{stat.label}</div>
-              <div className="text-lg font-bold text-slate-900">{stat.val}</div>
-              <div className="text-[10px] text-slate-400">{stat.sub}</div>
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">{stat.label}</div>
+              <div className="text-lg font-semibold text-ink">{stat.val}</div>
+              <div className="text-[10px] text-muted">{stat.sub}</div>
             </div>
           </div>
         ))}

@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .models.database import create_all
-from .routers import ai_actions, analytics, auth, demo, green_score, inventory, procurement, receiving, returns, sales, stores, suppliers, transfers, whatsapp, ws
+from .routers import ai_actions, ai_intelligence, analytics, auth, green_score, inventory, procurement, receiving, reports, sales, stores, suppliers, whatsapp, ws, transfers, returns
 from .scheduler import shutdown as scheduler_shutdown
 from .scheduler import set_loop, start as start_scheduler
 from .seed import seed_if_empty
@@ -24,9 +24,13 @@ _loop: asyncio.AbstractEventLoop | None = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_all()
-    seed_result = seed_if_empty(seed_synthetic_data=settings.SEED_WITH_SYNTHETIC_DATA)
-    if seed_result.get("seeded"):
-        print(f"[GreenShop AI] Seeded demo data: {seed_result}")
+    seed_result = {}
+    if settings.SEED_DEMO:
+        seed_result = seed_if_empty()
+        if seed_result.get("seeded"):
+            print(f"[GreenShop AI] Seeded demo data: {seed_result}")
+    else:
+        print("[GreenShop AI] SEED_DEMO=false — booting with an empty database (real onboarding).")
     global _loop
     _loop = asyncio.get_running_loop()
     set_loop(_loop)
@@ -52,21 +56,20 @@ app.add_middleware(
 
 # API routers (all under /api/*)
 app.include_router(auth.router)
-app.include_router(demo.router)
 app.include_router(inventory.router)
+app.include_router(procurement.router)
 app.include_router(sales.router)
 app.include_router(receiving.router)
 app.include_router(suppliers.router)
-app.include_router(stores.router)
 app.include_router(ai_actions.router)
+app.include_router(ai_intelligence.router)
 app.include_router(green_score.router)
 app.include_router(analytics.router)
+app.include_router(reports.router)
 app.include_router(whatsapp.router)
-app.include_router(procurement.router)
+app.include_router(stores.router)
 app.include_router(transfers.router)
 app.include_router(returns.router)
-
-
 # WebSocket channel (no /api prefix — browsers can't set headers on WS upgrade)
 app.include_router(ws.router)
 

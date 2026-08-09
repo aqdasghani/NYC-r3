@@ -20,8 +20,12 @@ import tempfile
 _TEST_DIR = pathlib.Path(tempfile.mkdtemp(prefix="greenshop-tests-"))
 os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_DIR / 'test.db'}"
 os.environ["DISABLE_SCHEDULER"] = "true"
-os.environ["SEED_WITH_SYNTHETIC_DATA"] = "true"
 os.environ["OPENAI_API_KEY"] = ""  # force rule-based AI, no network in tests
+# The session client below is a synthetic demo dataset used as a TEST FIXTURE.
+# Production boots with SEED_DEMO=false (real empty store). Tests that must
+# exercise a truly empty/fresh store create their own store via /register
+# (see test_golden_flow.py).
+os.environ["SEED_DEMO"] = "true"
 
 import pytest  # noqa: E402
 import sqlalchemy as sa  # noqa: E402
@@ -49,13 +53,6 @@ def owner_headers(client):
 @pytest.fixture(scope="session")
 def manager_headers(client):
     r = client.post("/api/auth/login", json={"email": "priya@greenshop.ai", "password": "demo1234"})
-    assert r.status_code == 200, r.text
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
-
-
-@pytest.fixture(scope="session")
-def biller_headers(client):
-    r = client.post("/api/auth/login", json={"email": "neha@greenshop.ai", "password": "demo1234"})
     assert r.status_code == 200, r.text
     return {"Authorization": f"Bearer {r.json()['access_token']}"}
 

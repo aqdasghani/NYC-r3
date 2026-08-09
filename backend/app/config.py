@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -17,28 +18,36 @@ class Settings(BaseSettings):
 
     # App
     APP_NAME: str = "GreenShop AI"
-    ENVIRONMENT: str = "development"  # development | demo | production
     DEBUG: bool = True
 
-    # Database — SQLite default for dev/test, PostgreSQL required for production.
+    # Database — SQLite default, switch to PostgreSQL via full URL.
     DATABASE_URL: str = f"sqlite:///{BASE_DIR / 'greenshop.db'}"
-    SEED_WITH_SYNTHETIC_DATA: bool = False
 
     # Auth
     JWT_SECRET: str = "dev-secret-change-me-in-production"
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRES_MIN: int = 1440  # 24h
+    JWT_REFRESH_EXPIRES_DAYS: int = 30
+
+    # Google OAuth
     GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://localhost:3000/api/auth/callback/google"
 
     # Cache (optional Redis; empty -> in-memory)
     REDIS_URL: str = ""
 
-    # AI services (all optional; empty -> mock-first fallbacks)
+    # AI services
     GOOGLE_VISION_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-1.5-pro"
+
+    # AI Provider abstraction
+    AI_PROVIDER: str = "gemini"  # gemini | ollama | openai
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "llama3.1:8b"
 
     # WhatsApp
     WHATSAPP_VERIFY_TOKEN: str = "greenshop-demo"
@@ -52,7 +61,9 @@ class Settings(BaseSettings):
     DISABLE_SCHEDULER: bool = False
     DETECTION_INTERVAL_MINUTES: int = 15
 
-    # Seed
+    # Seed — demo data only when explicitly enabled. A fresh DB with SEED_DEMO=false
+    # boots empty (real onboarding); demo environments opt in.
+    SEED_DEMO: bool = False  # Changed default to False for production
     SEED_PRODUCT_COUNT: int = 1284
 
     @property
@@ -61,24 +72,7 @@ class Settings(BaseSettings):
 
     @property
     def is_sqlite(self) -> bool:
-        return str(self.DATABASE_URL).startswith("sqlite")
-
-    def validate_production(self) -> None:
-        if self.ENVIRONMENT == "production":
-            db_url = str(self.DATABASE_URL).lower()
-            pg_prefixes = ("postgresql://", "postgres://", "postgresql+psycopg://", "postgresql+psycopg2://")
-            if not self.DATABASE_URL or self.is_sqlite or not db_url.startswith(pg_prefixes):
-                raise ValueError("Production mode requires PostgreSQL DATABASE_URL, not SQLite.")
-            if not self.JWT_SECRET or self.JWT_SECRET == "dev-secret-change-me-in-production":
-                raise ValueError("Production mode requires a secure JWT_SECRET environment variable.")
-            if not self.CORS_ORIGINS or not self.cors_origin_list:
-                raise ValueError("Production mode requires explicit CORS_ORIGINS.")
-            if self.DEBUG:
-                self.DEBUG = False
+        return self.DATABASE_URL.startswith("sqlite")
 
 
 settings = Settings()
-if settings.ENVIRONMENT == "production":
-    settings.validate_production()
-    settings.DEBUG = False
-

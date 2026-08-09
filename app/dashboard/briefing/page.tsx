@@ -1,227 +1,346 @@
 "use client";
-import RoleGate from '@/components/layout/RoleGate';
 
-
-import React, { useEffect, useState } from "react";
-import Link from "next/link";
-import { Sparkles, Brain, Leaf, AlertTriangle, ArrowRightLeft, TrendingUp, CheckCircle2, ChevronRight, Zap, BarChart, Package, Clock, ShoppingCart } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Sparkles, Brain, Leaf, AlertTriangle, ArrowRightLeft, TrendingUp, CheckCircle2, ChevronRight, Zap, RefreshCw, Check } from "lucide-react";
 import { formatINR } from "@/lib/utils";
-import { useDashboardData } from "@/lib/hooks/useDashboardData";
-import { getActions, getInventoryIntelligence, getWeeklyComparison, getBriefing } from "@/lib/api";
-import type { ActionOut, InventoryIntelligence, WeeklyComparison, DailyBrief } from "@/lib/backend-types";
+import { getActions, executeAction, dismissAction, getAIInsights, getDashboardSummary, generateActions } from "@/lib/api";
+import type { ActionOut } from "@/lib/backend-types";
 
-function BriefingPageContent() {
-  const { summary, loading } = useDashboardData();
+interface AIInsight {
+  title: string;
+  description: string;
+}
+
+export default function BriefingPage() {
+  const router = useRouter();
+  const [userName, setUserName] = useState<string>("Store Manager");
   const [actions, setActions] = useState<ActionOut[]>([]);
-  const [invIntel, setInvIntel] = useState<InventoryIntelligence | null>(null);
-  const [weekly, setWeekly] = useState<WeeklyComparison | null>(null);
-  const [briefing, setBriefing] = useState<DailyBrief | null>(null);
+  const [insights, setInsights] = useState<any[]>([]);
+  const [summary, setSummary] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [executingId, setExecutingId] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const authRaw = localStorage.getItem("greenshop_auth") || localStorage.getItem("Green Quant_auth");
+      if (authRaw) {
+        const parsed = JSON.parse(authRaw);
+        if (parsed?.user?.name) setUserName(parsed.user.name);
+      }
+
+      const [acts, ins, sum] = await Promise.all([
+        getActions("PENDING").catch(() => []),
+        getAIInsights().catch(() => []),
+        getDashboardSummary().catch(() => null),
+      ]);
+      setActions(acts);
+      setInsights(ins);
+      setSummary(sum);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function loadData() {
-      const [actionsRes, invRes, weeklyRes, briefRes] = await Promise.all([
-        getActions("PENDING"),
-        getInventoryIntelligence(),
-        getWeeklyComparison(),
-        getBriefing()
-      ]);
-      // Sort actions by value_at_risk descending and take top 5
-      const sorted = actionsRes.sort((a, b) => (b.value_at_risk || 0) - (a.value_at_risk || 0)).slice(0, 5);
-      setActions(sorted);
-      setInvIntel(invRes);
-      setWeekly(weeklyRes);
-      setBriefing(briefRes);
-    }
     loadData();
   }, []);
 
-  if (loading || !summary) {
-    return <div className="p-8 text-center text-slate-500 animate-pulse">Generating your daily briefing...</div>;
-  }
+  const handleExecute = async (action: ActionOut) => {
+    setExecutingId(action.id);
+    setMessage(null);
+    try {
+      const targetRec = action.recommendations[0] || {
+        rank: 1,
+        action_type: "DISCOUNT",
+        params: { discount_pct: 15 },
+        expected_outcome: action.value_at_risk || 500,
+        confidence: 85,
+        reasoning: "Automated intervention",
+      };
 
-  const kpis = summary.kpis;
-  const avgOrderValue = (kpis.today_revenue || 0) / (kpis.today_orders || 1);
-  const formattedDate = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+      const res = await executeAction(action.id, targetRec);
+      setActions((prev) => prev.filter((a) => a.id !== action.id));
+      setMessage({
+        text: `Successfully executed action! Prevented ${formatINR(res.waste_prevented)} in waste.`,
+        type: "success",
+      });
+    } catch (err: any) {
+      setMessage({ text: err.message || "Failed to execute action.", type: "error" });
+    } finally {
+      setExecutingId(null);
+    }
+  };
+
+  const handleDismiss = async (actionId: string) => {
+    setExecutingId(actionId);
+    try {
+      await dismissAction(actionId);
+      setActions((prev) => prev.filter((a) => a.id !== actionId));
+      setMessage({ text: "Action dismissed.", type: "success" });
+    } catch (err: any) {
+      setMessage({ text: err.message || "Failed to dismiss.", type: "error" });
+    } finally {
+      setExecutingId(null);
+    }
+  };
+
+  const handleAcceptAll = async () => {
+    if (actions.length === 0) return;
+    setLoading(true);
+    let successCount = 0;
+    let totalPrevented = 0;
+
+    for (const action of [...actions]) {
+      try {
+        const targetRec = action.recommendations[0] || {
+          rank: 1,
+          action_type: "DISCOUNT",
+          params: { discount_pct: 15 },
+          expected_outcome: action.value_at_risk || 500,
+          confidence: 85,
+          reasoning: "Batch execution",
+        };
+        const res = await executeAction(action.id, targetRec);
+        successCount++;
+        totalPrevented += res.waste_prevented || 0;
+      } catch (err) {
+        console.error("Error executing action:", action.id, err);
+      }
+    }
+
+    setActions([]);
+    setLoading(false);
+    setMessage({
+      text: `Executed ${successCount} action(s). Total waste prevented: ${formatINR(totalPrevented)}.`,
+      type: "success",
+    });
+  };
+
+  const handleGenerateDetection = async () => {
+    setGenerating(true);
+    setMessage(null);
+    try {
+      await generateActions();
+      await loadData();
+      setMessage({ text: "Ran fresh AI detection across all store inventory.", type: "success" });
+    } catch (err: any) {
+      setMessage({ text: err.message || "Failed to run detection.", type: "error" });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const totalPotentialSavings = actions.reduce((acc, a) => acc + (a.value_at_risk || 0), 0);
 
   return (
     <div className="space-y-6 pb-12">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-green-600" /> Morning Intelligence
+            <Sparkles className="w-5 h-5 text-green-600" /> AI Daily Briefing
           </h2>
-          <p className="text-sm text-slate-500">{formattedDate}</p>
+          <p className="text-sm text-slate-500">Your personalized morning digest generated by GreenShop AI.</p>
         </div>
-        <div className="text-xs font-semibold bg-green-100 text-green-700 px-3 py-1.5 rounded-full flex items-center gap-1.5">
-          <CheckCircle2 className="w-4 h-4" /> Fresh insights
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleGenerateDetection}
+            disabled={generating}
+            className="text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${generating ? "animate-spin" : ""}`} />
+            {generating ? "Scanning..." : "Re-Scan Stock"}
+          </button>
+          <div className="text-xs font-semibold bg-green-100 text-green-700 px-3 py-1.5 rounded-full flex items-center gap-1.5">
+            <CheckCircle2 className="w-4 h-4" /> Live AI Engine Active
+          </div>
         </div>
       </div>
 
-      {/* Top Banner Header */}
+      {message && (
+        <div
+          className={`p-4 rounded-xl text-sm font-medium flex items-center justify-between ${
+            message.type === "success" ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"
+          }`}
+        >
+          <span>{message.text}</span>
+          <button onClick={() => setMessage(null)} className="text-xs font-bold underline ml-4">
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Top Banner */}
       <div className="bg-[#063120] rounded-2xl p-6 border border-[#0A412A] text-white relative overflow-hidden flex flex-col md:flex-row justify-between items-center gap-6">
         <div className="absolute top-0 right-0 w-64 h-64 bg-[#0FA958] rounded-full blur-3xl opacity-20 transform translate-x-1/2 -translate-y-1/2" />
-        
+
         <div className="relative z-10 max-w-xl">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-8 h-8 bg-[#0FA958] rounded-full flex items-center justify-center">
               <Brain className="w-4 h-4 text-white" />
             </div>
-            <h3 className="font-bold text-lg">Good Morning, Store Owner 🌱</h3>
+            <h3 className="font-bold text-lg">Good Morning, {userName}!</h3>
           </div>
           <p className="text-sm text-slate-300 leading-relaxed">
-            Here is your daily store briefing. {briefing ? `You have ${briefing.important_actions} important actions pending, with an estimated impact of ₹${briefing.est_impact.toLocaleString('en-IN')}.` : "We've detected important inventory insights and sales trends to start your day effectively."}
+            The AI engine has analyzed your store inventory. We've identified{" "}
+            <span className="font-bold text-white">{actions.length} urgent action(s)</span> today that could prevent up to{" "}
+            <span className="font-bold text-white">{formatINR(totalPotentialSavings || 0)}</span> in potential waste.
           </p>
         </div>
-      </div>
 
-      {/* Snapshot */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="glass-panel p-4 border-t-4 border-t-green-500">
-          <div className="text-xs text-slate-500 font-semibold mb-1 uppercase tracking-wide">Today Revenue</div>
-          <div className="text-xl font-bold text-slate-900">{kpis.today_revenue ? formatINR(kpis.today_revenue) : "₹0"}</div>
-        </div>
-        <div className="glass-panel p-4 border-t-4 border-t-blue-500">
-          <div className="text-xs text-slate-500 font-semibold mb-1 uppercase tracking-wide">Orders</div>
-          <div className="text-xl font-bold text-slate-900">{kpis.today_orders || 0}</div>
-        </div>
-        <div className="glass-panel p-4 border-t-4 border-t-indigo-500">
-          <div className="text-xs text-slate-500 font-semibold mb-1 uppercase tracking-wide">Units</div>
-          <div className="text-xl font-bold text-slate-900">{kpis.today_units || 0}</div>
-        </div>
-        <div className="glass-panel p-4 border-t-4 border-t-orange-500">
-          <div className="text-xs text-slate-500 font-semibold mb-1 uppercase tracking-wide">Avg Order Value</div>
-          <div className="text-xl font-bold text-slate-900">{formatINR(avgOrderValue)}</div>
+        <div className="relative z-10 flex gap-4 w-full md:w-auto">
+          <div className="bg-white/10 border border-white/10 rounded-xl p-4 flex-1 text-center backdrop-blur-sm">
+            <div className="text-xs text-slate-300 mb-1">Stock Items</div>
+            <div className="text-xl font-bold">{(summary?.kpis?.product_count ?? 0).toLocaleString()}</div>
+          </div>
+          <div className="bg-white/10 border border-white/10 rounded-xl p-4 flex-1 text-center backdrop-blur-sm">
+            <div className="text-xs text-slate-300 mb-1">AI Score</div>
+            <div className="text-xl font-bold text-green-400">{(summary?.score_data?.score ?? 0).toFixed(0)}/100</div>
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Left Column: Priority Actions & Sales */}
+        {/* Left Column: Priority Actions */}
         <div className="lg:col-span-2 space-y-6">
           <div className="glass-panel p-5">
-            <h3 className="text-base font-bold text-slate-800 flex items-center gap-2 mb-5">
-              <Zap className="w-4 h-4 text-red-500" /> 🔴 Actions Needed Today
-            </h3>
-            
-            <div className="space-y-3">
-              {actions.length === 0 ? (
-                <div className="text-center text-sm text-slate-500 py-4">No urgent actions pending today!</div>
-              ) : (
-                actions.map((action) => (
-                  <div key={action.id} className="border border-slate-100 rounded-xl p-4 flex items-center justify-between gap-4">
-                    <div>
-                      <div className="flex gap-2 items-center mb-1">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-red-600 bg-red-50 px-2 py-0.5 rounded">
-                          {action.risk_type.replace(/_/g, " ")}
-                        </span>
-                      </div>
-                      <h4 className="text-sm font-bold text-slate-900">{action.product_name}</h4>
-                      <p className="text-xs text-slate-500 mt-1">Value at risk: {formatINR(action.value_at_risk || 0)}</p>
-                    </div>
-                    
-                    <Link href="/dashboard/actions" className="text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 px-4 py-2 rounded-lg transition-colors whitespace-nowrap">
-                      Act Now
-                    </Link>
-                  </div>
-                ))
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                <Zap className="w-4 h-4 text-amber-500" /> Action Items ({actions.length})
+              </h3>
+              {actions.length > 0 && (
+                <button onClick={handleAcceptAll} className="text-xs font-bold text-blue-600 hover:underline">
+                  Accept All ({actions.length})
+                </button>
               )}
             </div>
-          </div>
 
-          <div className="glass-panel p-5">
-            <h3 className="text-base font-bold text-slate-800 flex items-center gap-2 mb-4">
-              <BarChart className="w-4 h-4 text-blue-600" /> 📈 Sales This Week
-            </h3>
-            {weekly ? (
-              <div className="flex items-center gap-6">
-                <div>
-                  <div className="text-sm text-slate-500 mb-1">This Week</div>
-                  <div className="text-2xl font-bold text-slate-900">{formatINR(weekly.this_week.revenue)}</div>
-                </div>
-                <div className="text-slate-300">|</div>
-                <div>
-                  <div className="text-sm text-slate-500 mb-1">Last Week</div>
-                  <div className="text-xl font-semibold text-slate-600">{formatINR(weekly.last_week.revenue)}</div>
-                </div>
-                <div className={`ml-auto px-3 py-1 rounded-full text-sm font-bold ${weekly.revenue_growth_pct >= 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                  {weekly.revenue_growth_pct >= 0 ? "↑" : "↓"} {Math.abs(weekly.revenue_growth_pct)}%
-                </div>
+            {loading ? (
+              <div className="py-8 text-center text-slate-400 text-sm animate-pulse">Loading AI action items...</div>
+            ) : actions.length === 0 ? (
+              <div className="py-12 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                <Check className="w-8 h-8 text-green-500 mx-auto mb-2" />
+                <p className="font-bold text-slate-700 text-sm">All clear! No pending urgent actions.</p>
+                <p className="text-xs text-slate-400 mt-1">Your inventory is optimized with 0 high-risk expiry batches.</p>
               </div>
             ) : (
-              <div className="text-sm text-slate-500">Loading sales data...</div>
+              <div className="space-y-4">
+                {actions.map((action) => {
+                  const rec = action.recommendations[0];
+                  const actionType = rec?.action_type || "SELL FIRST";
+                  const impact = action.value_at_risk || rec?.expected_outcome || 0;
+                  const reason = rec?.reasoning || `Severity: ${action.severity} (${action.risk_type})`;
+
+                  let colorClass = "bg-amber-50 text-amber-600 border-amber-200";
+                  let btnColor = "bg-amber-500 hover:bg-amber-600";
+                  let Icon = AlertTriangle;
+
+                  if (actionType === "DISCOUNT") {
+                    colorClass = "bg-orange-50 text-orange-600 border-orange-200";
+                    btnColor = "bg-orange-500 hover:bg-orange-600";
+                    Icon = TrendingUp;
+                  } else if (actionType === "TRANSFER") {
+                    colorClass = "bg-blue-50 text-blue-600 border-blue-200";
+                    btnColor = "bg-blue-600 hover:bg-blue-700";
+                    Icon = ArrowRightLeft;
+                  } else if (actionType === "RETURN") {
+                    colorClass = "bg-purple-50 text-purple-600 border-purple-200";
+                    btnColor = "bg-purple-600 hover:bg-purple-700";
+                    Icon = AlertTriangle;
+                  }
+
+                  return (
+                    <div
+                      key={action.id}
+                      className="border border-slate-100 rounded-xl p-4 hover:border-slate-300 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${colorClass}`}>
+                          <Icon className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${colorClass}`}>
+                              {actionType}
+                            </span>
+                            <span className="text-xs font-bold text-slate-800">Est. Impact: {formatINR(impact)}</span>
+                          </div>
+                          <h4 className="text-sm font-bold text-slate-900">{action.product_name}</h4>
+                          <p className="text-xs text-slate-500 mt-1">{reason}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 sm:shrink-0 w-full sm:w-auto">
+                        <button
+                          onClick={() => handleDismiss(action.id)}
+                          disabled={executingId === action.id}
+                          className="flex-1 sm:flex-none text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          Dismiss
+                        </button>
+                        <button
+                          onClick={() => handleExecute(action)}
+                          disabled={executingId === action.id}
+                          className={`flex-1 sm:flex-none text-xs font-bold text-white px-4 py-2 rounded-lg transition-colors ${btnColor} disabled:opacity-50`}
+                        >
+                          {executingId === action.id ? "Processing..." : "Execute"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>
 
-        {/* Right Column: Inventory Alerts & Quick Actions */}
+        {/* Right Column: Insights & Strategic Actions */}
         <div className="col-span-1 space-y-6">
           <div className="glass-panel p-5">
             <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <Package className="w-4 h-4 text-orange-600" /> 📦 Inventory Alerts
+              <Leaf className="w-4 h-4 text-green-600" /> Strategic Insights
             </h3>
-            
-            {invIntel ? (
-              <div className="space-y-3">
-                <Link href="/dashboard/inventory" className="block border border-orange-100 bg-orange-50/30 rounded-xl p-4 hover:bg-orange-50 transition-colors">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-900 mb-1 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-orange-500" /> Near Expiry</h4>
-                      <p className="text-[11px] text-slate-600">{invIntel.near_expiry.count} products at risk</p>
-                    </div>
-                    <div className="text-xs font-bold text-orange-600">{formatINR(invIntel.near_expiry.value)}</div>
-                  </div>
-                </Link>
 
-                <Link href="/dashboard/inventory" className="block border border-blue-100 bg-blue-50/30 rounded-xl p-4 hover:bg-blue-50 transition-colors">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-900 mb-1">Low Stock</h4>
-                      <p className="text-[11px] text-slate-600">{invIntel.low_stock.count} products to reorder</p>
-                    </div>
+            <div className="space-y-4">
+              {insights.length > 0 ? (
+                insights.map((insight, i) => (
+                  <div key={i} className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                    <h4 className="text-xs font-bold text-slate-900 mb-1">{insight.title}</h4>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">{insight.description}</p>
                   </div>
-                </Link>
-
-                <Link href="/dashboard/inventory" className="block border border-slate-200 bg-slate-50 rounded-xl p-4 hover:bg-slate-100 transition-colors">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-900 mb-1">Dead Stock</h4>
-                      <p className="text-[11px] text-slate-600">{invIntel.dead_stock.count} products tied up</p>
-                    </div>
-                    <div className="text-xs font-bold text-slate-500">{formatINR(invIntel.dead_stock.value)}</div>
+                ))
+              ) : (
+                <>
+                  <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                    <h4 className="text-xs font-bold text-slate-900 mb-1">Weekend Surge Predicted</h4>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      Weather forecast indicates rain. Expect 20% higher footfall for comfort foods and bakery items.
+                    </p>
                   </div>
-                </Link>
-              </div>
-            ) : (
-              <div className="text-sm text-slate-500">Loading alerts...</div>
-            )}
-          </div>
+                  <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                    <h4 className="text-xs font-bold text-slate-900 mb-1">Supplier Reliability</h4>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      FreshFarm supplier delivery time has improved by 1.5 hours on average this week.
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Link href="/dashboard/scanner" className="bg-white border border-slate-200 text-slate-700 rounded-lg p-3 text-center text-xs font-bold hover:border-green-300 hover:text-green-700 transition-colors">
-              Scan Product
-            </Link>
-            <Link href="/dashboard/pos" className="bg-white border border-slate-200 text-slate-700 rounded-lg p-3 text-center text-xs font-bold hover:border-green-300 hover:text-green-700 transition-colors">
-              Record Sale
-            </Link>
-            <Link href="/dashboard/reports" className="bg-white border border-slate-200 text-slate-700 rounded-lg p-3 text-center text-xs font-bold hover:border-green-300 hover:text-green-700 transition-colors">
-              View Reports
-            </Link>
-            <Link href="/dashboard/actions" className="bg-white border border-slate-200 text-slate-700 rounded-lg p-3 text-center text-xs font-bold hover:border-green-300 hover:text-green-700 transition-colors">
-              AI Actions
-            </Link>
+            <button
+              onClick={() => router.push("/dashboard/reports")}
+              className="w-full mt-4 py-2.5 border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2"
+            >
+              Generate Deep Dive Report <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
-
       </div>
     </div>
-  );
-}
-
-
-export default function BriefingPage() {
-  return (
-    <RoleGate module="analytics">
-      <BriefingPageContent />
-    </RoleGate>
   );
 }

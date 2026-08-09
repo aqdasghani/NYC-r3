@@ -4,10 +4,11 @@ import json
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from ..config import settings
-from ..deps import get_owner_manager
+from ..deps import get_owner_manager, get_db
 from ..integrations.whatsapp_service import classify_intent, intent_response, verify_signature, verify_token
-from ..models.database import User
-from ..models.schemas import MessageOut, WhatsAppStatusOut, WhatsAppWebhookIn
+from ..models.database import User, WhatsappMessage
+from ..models.schemas import MessageOut, WhatsAppStatusOut, WhatsAppWebhookIn, WhatsappMessageCreate, WhatsappMessageOut
+from sqlalchemy import select
 
 router=APIRouter(prefix="/api/whatsapp",tags=["whatsapp"])
 
@@ -35,3 +36,22 @@ def inbound(payload:WhatsAppWebhookIn, x_hub_signature_256:str|None=Header(None)
 
 @router.get("/status",response_model=WhatsAppStatusOut)
 def status(user:User=Depends(get_owner_manager)): return WhatsAppStatusOut(configured=bool(settings.WHATSAPP_API_TOKEN and settings.WHATSAPP_PHONE_ID),verify_token=settings.WHATSAPP_VERIFY_TOKEN,phone_id=settings.WHATSAPP_PHONE_ID)
+
+@router.post("/", response_model=WhatsappMessageOut)
+def send_message(payload: WhatsappMessageCreate, user: User = Depends(get_owner_manager), db = Depends(get_db)):
+    if not user.store_id: raise HTTPException(400, "User is not assigned to a store")
+    msg = WhatsappMessage(
+        store_id=user.store_id,
+        customer_phone=payload.customer_phone,
+        message_text=payload.message_text,
+        is_from_customer=payload.is_from_customer
+    )
+    db.add(msg)
+    db.commit()
+    db.refresh(msg)
+    return msg
+
+@router.get("/", response_model=list[WhatsappMessageOut])
+def get_messages(user: User = Depends(get_owner_manager), db = Depends(get_db)):
+    if not user.store_id: raise HTTPException(400, "User is not assigned to a store")
+    return db.scalars(select(WhatsappMessage).where(WhatsappMessage.store_id == user.store_id)).all()

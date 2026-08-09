@@ -1,14 +1,10 @@
 "use client";
-import RoleGate from '@/components/layout/RoleGate';
 
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRightLeft, Building2, PackageSearch, CheckCircle2, ChevronRight, Truck } from "lucide-react";
-
-import { apiFetch } from "@/lib/api-client";
-
-// Mock Data removed - using real API data
+import { ArrowRightLeft, Building2, PackageSearch, CheckCircle2, ChevronRight, Truck, Loader2, AlertCircle } from "lucide-react";
+import apiClient from "@/lib/api-client";
+import { Store, InventoryBatch } from "@/lib/backend-types";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -20,113 +16,85 @@ const itemVariants = {
   show: { opacity: 1, y: 0, transition: { duration: 0.4 } },
 };
 
-function TransfersPageContent() {
-  const [showWizard, setShowWizard] = useState(false);
+export default function TransfersPage() {
   const [step, setStep] = useState(1);
   const [sourceStore, setSourceStore] = useState("");
   const [destStore, setDestStore] = useState("");
   const [selectedBatches, setSelectedBatches] = useState<string[]>([]);
   
-  const [transfers, setTransfers] = useState<any[]>([]);
-  const [stores, setStores] = useState<any[]>([]);
-  const [batches, setBatches] = useState<any[]>([]);
+  const [stores, setStores] = useState<Store[]>([]);
+  const [batches, setBatches] = useState<InventoryBatch[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     async function loadData() {
       try {
-        const tList = await apiFetch<any[]>("/api/transfers");
-        setTransfers(tList || []);
-      } catch (e) {
-        setTransfers([]);
+        const [storesData, batchesData] = await Promise.all([
+           // Real stores only — never fabricated branches. Inter-store transfers
+           // require a second store owned by the account (see /api/stores).
+           apiClient.get<any[]>("/api/stores"),
+           apiClient.get<InventoryBatch[]>("/api/inventory/batches")
+        ]);
+        setStores(storesData as Store[]);
+        setBatches(batchesData);
+      } catch (err: any) {
+        setError(err.message || "Failed to load transfer data");
+      } finally {
+        setLoading(false);
       }
-      try {
-        const sList = await apiFetch<any[]>("/api/stores");
-        setStores(sList || []);
-      } catch (e) {
-        setStores([]);
-      }
-      try {
-        const bList = await apiFetch<any[]>("/api/inventory/batches");
-        setBatches(bList || []);
-      } catch (e) {
-        setBatches([]);
-      }
-      setLoading(false);
     }
     loadData();
   }, []);
   
-  const handleTransfer = () => {
-    setStep(4); // Success step
+  const handleTransfer = async () => {
+    try {
+      // Create transfer requests for each selected batch
+      for (const batchId of selectedBatches) {
+         const batch = batches.find(b => b.id === batchId);
+         if (!batch) continue;
+         await apiClient.post<any>("/api/transfers/", {
+             from_store_id: sourceStore,
+             to_store_id: destStore,
+             product_id: batch.product_id,
+             quantity: batch.quantity || 1
+         });
+      }
+      setStep(4); // Success step
+    } catch (err: any) {
+      alert("Transfer failed: " + err.message);
+    }
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-brand-green" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64 text-red-500">
+        <AlertCircle className="w-6 h-6 mr-2" /> {error}
+      </div>
+    );
+  }
+
   return (
-    <motion.div variants={containerVariants} initial="hidden" animate="show" className="space-y-6 max-w-5xl mx-auto">
-      <motion.div variants={itemVariants} className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight mb-2 flex items-center gap-2">
-            <ArrowRightLeft className="w-8 h-8 text-brand-green" />
-            Stock Transfers
-          </h1>
-          <p className="text-text-secondary">Move inventory between stores to balance stock levels and reduce expiry waste.</p>
-        </div>
-        <button
-          onClick={() => { setShowWizard(!showWizard); setStep(1); }}
-          className="flex items-center gap-2 bg-brand-green text-black px-4 py-2 rounded-lg font-medium hover:bg-brand-green/90 transition-colors shadow-[0_0_15px_rgba(34,197,94,0.3)]"
-        >
-          {showWizard ? "Back to Transfers" : "New Transfer"}
-        </button>
+    <motion.div variants={containerVariants} initial="hidden" animate="show" className="space-y-6 max-w-5xl mx-auto pb-12">
+      <motion.div variants={itemVariants}>
+        <h1 className="text-3xl font-bold tracking-tight mb-2 flex items-center gap-2 text-text-primary">
+          <ArrowRightLeft className="w-8 h-8 text-brand-green" />
+          Stock Transfers
+        </h1>
+        <p className="text-text-secondary">Move inventory between stores to balance stock levels and reduce expiry waste.</p>
       </motion.div>
 
-      {!showWizard ? (
-        <motion.div variants={itemVariants} className="glass-panel overflow-hidden">
-          <div className="p-4 border-b border-border-default bg-slate-50">
-            <h3 className="font-semibold text-text-primary">Recent Transfers</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[500px]">
-              <thead>
-                <tr className="border-b border-border-default">
-                  <th className="p-4 text-xs font-medium text-text-secondary uppercase">Transfer ID</th>
-                  <th className="p-4 text-xs font-medium text-text-secondary uppercase">Source</th>
-                  <th className="p-4 text-xs font-medium text-text-secondary uppercase">Destination</th>
-                  <th className="p-4 text-xs font-medium text-text-secondary uppercase">Date</th>
-                  <th className="p-4 text-xs font-medium text-text-secondary uppercase">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border-default">
-                {loading ? (
-                  <tr>
-                    <td colSpan={5} className="p-4 text-center text-text-muted">Loading transfers...</td>
-                  </tr>
-                ) : transfers.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="p-4 text-center text-text-muted">No transfers found.</td>
-                  </tr>
-                ) : (
-                  transfers.map((t, idx) => (
-                    <tr key={idx} className="hover:bg-bg-surface/50 transition-colors cursor-pointer">
-                      <td className="p-4 font-medium text-brand-green">{t.id || `TRN-${Math.floor(Math.random() * 10000)}`}</td>
-                      <td className="p-4 text-text-primary">{t.source_store_name || t.source_store_id || 'Unknown'}</td>
-                      <td className="p-4 text-text-primary">{t.dest_store_name || t.dest_store_id || 'Unknown'}</td>
-                      <td className="p-4 text-text-secondary">{t.created_at ? new Date(t.created_at).toLocaleDateString() : 'N/A'}</td>
-                      <td className="p-4">
-                        <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200">
-                          {t.status || 'Pending'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </motion.div>
-      ) : (
-        <motion.div variants={itemVariants} className="glass-panel p-6">
-          {/* Transfer Wizard */}
-          {/* Progress Bar */}
+      {/* Transfer Wizard */}
+      <motion.div variants={itemVariants} className="glass-panel p-6">
+        {/* Progress Bar */}
         <div className="flex items-center justify-between mb-8 relative">
           <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-slate-100 rounded-full overflow-hidden">
              <div 
@@ -138,7 +106,7 @@ function TransfersPageContent() {
             <div 
               key={s} 
               className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm transition-colors duration-300 ${
-                step >= s ? "bg-brand-green text-black shadow-[0_0_10px_rgba(34,197,94,0.4)]" : "bg-slate-200 text-slate-500"
+                step >= s ? "bg-brand-green text-black shadow-[0_0_10px_rgba(34,197,94,0.4)]" : "bg-bg-surface border border-border-default text-text-muted"
               }`}
             >
               {s === 4 && step === 4 ? <CheckCircle2 className="w-5 h-5" /> : s}
@@ -154,24 +122,32 @@ function TransfersPageContent() {
               className="space-y-6"
             >
               <h2 className="text-xl font-semibold mb-4 text-text-primary">Select Stores</h2>
+              {stores.length < 2 ? (
+                <div className="p-8 rounded-lg border border-dashed border-border-default bg-bg-surface text-center">
+                  <Building2 className="w-8 h-8 mx-auto text-text-muted mb-3" />
+                  <p className="font-medium text-text-primary">Transfers need a second store</p>
+                  <p className="text-sm text-text-secondary mt-1 max-w-sm mx-auto">
+                    This workspace has one store. Inter-store transfers become available once a second branch is added to your account.
+                  </p>
+                </div>
+              ) : (
+                <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-2">Source Store</label>
                   <div className="space-y-2">
-                    {stores.length === 0 ? (
-                      <div className="text-sm text-text-muted p-2">No stores available</div>
-                    ) : stores.map(s => (
+                    {stores.map(s => (
                       <div 
                         key={`src-${s.id}`}
                         onClick={() => setSourceStore(s.id)}
                         className={`p-4 rounded-lg border cursor-pointer transition-all flex items-center gap-3 ${
-                          sourceStore === s.id ? "border-brand-green bg-brand-green/10" : "border-border-default hover:border-brand-green/50 hover:bg-bg-surface/50"
+                          sourceStore === s.id ? "border-brand-green bg-brand-green/10" : "border-border-default bg-bg-surface hover:border-brand-green/50 hover:bg-slate-50"
                         }`}
                       >
                         <Building2 className={`w-5 h-5 ${sourceStore === s.id ? "text-brand-green" : "text-text-muted"}`} />
                         <div>
                           <div className="font-medium text-text-primary">{s.name}</div>
-                          <div className="text-xs text-text-secondary">{s.stock || 0} items in stock</div>
+                          <div className="text-xs text-text-secondary">{s.id === stores[0]?.id ? batches.length + " batches" : "Active Store"}</div>
                         </div>
                       </div>
                     ))}
@@ -180,20 +156,18 @@ function TransfersPageContent() {
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-2">Destination Store</label>
                   <div className="space-y-2">
-                    {stores.length === 0 ? (
-                      <div className="text-sm text-text-muted p-2">No stores available</div>
-                    ) : stores.map(s => (
+                    {stores.map(s => (
                       <div 
                         key={`dst-${s.id}`}
                         onClick={() => setDestStore(s.id)}
                         className={`p-4 rounded-lg border cursor-pointer transition-all flex items-center gap-3 ${
-                          destStore === s.id ? "border-brand-green bg-brand-green/10" : "border-border-default hover:border-brand-green/50 hover:bg-bg-surface/50"
+                          destStore === s.id ? "border-brand-green bg-brand-green/10" : "border-border-default bg-bg-surface hover:border-brand-green/50 hover:bg-slate-50"
                         }`}
                       >
                         <Building2 className={`w-5 h-5 ${destStore === s.id ? "text-brand-green" : "text-text-muted"}`} />
                         <div>
                           <div className="font-medium text-text-primary">{s.name}</div>
-                          <div className="text-xs text-text-secondary">{s.stock || 0} items in stock</div>
+                          <div className="text-xs text-text-secondary">Destination</div>
                         </div>
                       </div>
                     ))}
@@ -209,6 +183,8 @@ function TransfersPageContent() {
                   Next Step <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
+              </>
+              )}
             </motion.div>
           )}
 
@@ -240,11 +216,7 @@ function TransfersPageContent() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-default">
-                    {batches.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="p-4 text-center text-text-muted">No batches available</td>
-                      </tr>
-                    ) : batches.map(batch => (
+                    {batches.map(batch => (
                       <tr 
                         key={batch.id} 
                         className={`cursor-pointer transition-colors hover:bg-slate-50 ${selectedBatches.includes(batch.id) ? "bg-brand-green/5" : ""}`}
@@ -254,21 +226,25 @@ function TransfersPageContent() {
                           <input type="checkbox" className="accent-brand-green cursor-pointer" checked={selectedBatches.includes(batch.id)} readOnly />
                         </td>
                         <td className="p-4">
-                          <div className="font-medium text-text-primary">{batch.product || batch.product_name || 'Unknown Product'}</div>
-                          <div className="text-xs text-text-muted">{batch.batchCode || batch.batch_number}</div>
+                          <div className="font-medium text-text-primary">Product ID: {batch.product_id.split("-")[0]}</div>
+                          <div className="text-xs text-text-muted">Batch: {batch.batch_number || "N/A"}</div>
                         </td>
-                        <td className="p-4 font-medium text-text-primary">{batch.qty || batch.quantity} units</td>
+                        <td className="p-4 font-medium text-text-primary">{batch.quantity} units</td>
                         <td className="p-4">
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            batch.status === 'CRITICAL' || batch.severity === 'CRITICAL' ? 'bg-red-500/10 text-red-500' :
-                            batch.status === 'WARNING' || batch.severity === 'WARNING' ? 'bg-orange-500/10 text-orange-500' :
+                            new Date(batch.expiry_date) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) ? 'bg-red-500/10 text-red-500' :
                             'bg-brand-green/10 text-brand-green'
                           }`}>
-                            {batch.expiry || (batch.days_remaining ? `${batch.days_remaining} days` : 'N/A')}
+                            {batch.expiry_date}
                           </span>
                         </td>
                       </tr>
                     ))}
+                    {batches.length === 0 && (
+                      <tr>
+                         <td colSpan={4} className="p-8 text-center text-text-secondary">No batches found in source store.</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -292,11 +268,11 @@ function TransfersPageContent() {
               className="space-y-6"
             >
               <h2 className="text-xl font-semibold mb-4 text-text-primary">Review & Confirm</h2>
-              <div className="bg-slate-50 p-6 rounded-lg border border-border-default space-y-4">
+              <div className="bg-bg-surface p-6 rounded-lg border border-border-default space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="text-sm text-text-secondary mb-1">From</div>
-                    <div className="font-semibold text-lg text-text-primary">{stores.find(s => s.id === sourceStore)?.name || 'Store'}</div>
+                    <div className="font-semibold text-lg text-text-primary">{stores.find(s => s.id === sourceStore)?.name}</div>
                   </div>
                   <div className="px-4">
                     <Truck className="w-6 h-6 text-brand-green mx-auto" />
@@ -304,7 +280,7 @@ function TransfersPageContent() {
                   </div>
                   <div className="flex-1 text-right">
                     <div className="text-sm text-text-secondary mb-1">To</div>
-                    <div className="font-semibold text-lg text-text-primary">{stores.find(s => s.id === destStore)?.name || 'Store'}</div>
+                    <div className="font-semibold text-lg text-text-primary">{stores.find(s => s.id === destStore)?.name}</div>
                   </div>
                 </div>
                 <hr className="border-border-default my-4" />
@@ -313,8 +289,8 @@ function TransfersPageContent() {
                   <ul className="space-y-2">
                     {batches.filter(b => selectedBatches.includes(b.id)).map(b => (
                       <li key={b.id} className="flex justify-between text-sm">
-                        <span className="text-text-secondary">{b.product || b.product_name || 'Product'} ({b.batchCode || b.batch_number})</span>
-                        <span className="font-medium">{b.qty || b.quantity} units</span>
+                        <span className="text-text-secondary">PID: {b.product_id.split("-")[0]} ({b.batch_number || "No Batch"})</span>
+                        <span className="font-medium text-text-primary">{b.quantity} units</span>
                       </li>
                     ))}
                   </ul>
@@ -347,7 +323,7 @@ function TransfersPageContent() {
               </p>
               <button 
                 onClick={() => { setStep(1); setSourceStore(""); setDestStore(""); setSelectedBatches([]); }}
-                className="glass-panel px-6 py-2 font-medium hover:bg-bg-surface/80 transition-colors"
+                className="bg-bg-surface border border-border-default text-text-primary px-6 py-2 font-medium hover:bg-slate-50 rounded-lg transition-colors"
               >
                 Create Another Transfer
               </button>
@@ -355,16 +331,6 @@ function TransfersPageContent() {
           )}
         </AnimatePresence>
       </motion.div>
-      )}
     </motion.div>
-  );
-}
-
-
-export default function TransfersPage() {
-  return (
-    <RoleGate module="transfers">
-      <TransfersPageContent />
-    </RoleGate>
   );
 }
