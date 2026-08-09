@@ -530,6 +530,35 @@ export async function getBatches(): Promise<import("./backend-types").BatchOut[]
   return liveOr(() => apiFetch<import("./backend-types").BatchOut[]>("/api/inventory/batches"), () => []);
 }
 
+export async function createProduct(payload: {
+  name: string;
+  sku?: string;
+  barcode?: string;
+  category?: string;
+  purchase_price?: number;
+  selling_price?: number;
+  gst_rate?: number;
+  supplier_id?: string;
+  lead_time_days?: number;
+}): Promise<ProductOut> {
+  return apiFetch<ProductOut>("/api/inventory/products", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Distinct product categories for filter dropdowns. */
+export async function getCategories(): Promise<string[]> {
+  try {
+    const products = await getProducts();
+    const cats = Array.from(new Set(products.map((p) => p.category).filter(Boolean) as string[]));
+    return cats.sort();
+  } catch {
+    return [];
+  }
+}
+
 export async function getStockHealth(): Promise<StockHealthSegment[]> {
   return liveOr(
     () => apiFetch<StockHealthSegment[]>("/api/inventory/stock-health"),
