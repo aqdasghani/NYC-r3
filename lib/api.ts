@@ -43,6 +43,7 @@ import type {
   HeatmapRow,
   InventoryIntelligence,
   ProductDemand,
+  AiInsight,
 } from "@/lib/backend-types";
 import { apiFetch, apiFetchText, apiUpload, ensureAuth } from "@/lib/api-client";
 import {
@@ -491,7 +492,7 @@ export async function getNotifications(): Promise<AppNotification[]> {
   );
 }
 
-export async function getFeaturedRisk(): Promise<FeaturedRisk> {
+export async function getFeaturedRisk(): Promise<FeaturedRisk | null> {
   return liveOr(
     async () => {
       const rows = await apiFetch<AtRiskItem[]>("/api/inventory/at-risk");
@@ -745,3 +746,32 @@ export async function exportMonthlyReportCSV(): Promise<string> {
 }
 
 export type { ExtractedItem };
+
+export async function getInsights(): Promise<AiInsight[]> {
+  return liveOr(
+    () => apiFetch<AiInsight[]>("/api/analytics/insights"),
+    () => []
+  );
+}
+
+export async function getGreenScoreCurrent(): Promise<GreenScoreOut> {
+  return liveOr(
+    () => apiFetch<GreenScoreOut>("/api/green-score/current"),
+    () => ({
+      score: 84,
+      expiry_score: 80,
+      inventory_score: 85,
+      dead_stock_score: 82,
+      waste_score: 88,
+      breakdown: [],
+      period_date: new Date().toISOString().slice(0, 10),
+    })
+  );
+}
+
+export async function getGreenScoreHistory(days: number = 30): Promise<GreenScoreHistoryPoint[]> {
+  return liveOr(
+    () => apiFetch<GreenScoreHistoryPoint[]>(`/api/green-score/history?days=${days}`),
+    () => []
+  );
+}

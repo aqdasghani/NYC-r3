@@ -1,4 +1,6 @@
 "use client";
+import RoleGate from '@/components/layout/RoleGate';
+
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -27,7 +29,7 @@ const itemVariants = {
   show: { opacity: 1, y: 0, transition: { duration: 0.4 } },
 };
 
-export default function TransfersPage() {
+function TransfersPageContent() {
   const [step, setStep] = useState(1);
   const [sourceStore, setSourceStore] = useState("");
   const [destStore, setDestStore] = useState("");
@@ -271,5 +273,14 @@ export default function TransfersPage() {
         </AnimatePresence>
       </motion.div>
     </motion.div>
+  );
+}
+
+
+export default function TransfersPage() {
+  return (
+    <RoleGate module="transfers">
+      <TransfersPageContent />
+    </RoleGate>
   );
 }

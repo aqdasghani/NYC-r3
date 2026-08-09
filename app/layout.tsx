@@ -15,8 +15,9 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // We use a dummy client ID here for demo purposes, or fallback to an env variable
-  const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "dummy-client-id.apps.googleusercontent.com";
+  // Falls back to empty string — GoogleOAuthProvider still needs a value but
+  // the GoogleAuthButton component won't render the real button without a valid ID.
+  const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
 
   return (
     <html lang="en">

@@ -1,4 +1,6 @@
 "use client";
+import RoleGate from '@/components/layout/RoleGate';
+
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
@@ -8,7 +10,7 @@ import { useDashboardData } from "@/lib/hooks/useDashboardData";
 import { getActions, getInventoryIntelligence, getWeeklyComparison } from "@/lib/api";
 import type { ActionOut, InventoryIntelligence, WeeklyComparison } from "@/lib/backend-types";
 
-export default function BriefingPage() {
+function BriefingPageContent() {
   const { summary, loading } = useDashboardData();
   const [actions, setActions] = useState<ActionOut[]>([]);
   const [invIntel, setInvIntel] = useState<InventoryIntelligence | null>(null);
@@ -209,5 +211,14 @@ export default function BriefingPage() {
 
       </div>
     </div>
+  );
+}
+
+
+export default function BriefingPage() {
+  return (
+    <RoleGate module="analytics">
+      <BriefingPageContent />
+    </RoleGate>
   );
 }

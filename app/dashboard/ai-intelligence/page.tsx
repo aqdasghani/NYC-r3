@@ -1,4 +1,6 @@
 "use client";
+import RoleGate from '@/components/layout/RoleGate';
+
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -52,7 +54,7 @@ const insights = [
   }
 ];
 
-export default function AIIntelligencePage() {
+function AIIntelligencePageContent() {
   const [activeTab, setActiveTab] = useState('all');
 
   return (
@@ -183,5 +185,14 @@ export default function AIIntelligencePage() {
         )}
       </div>
     </div>
+  );
+}
+
+
+export default function AIIntelligencePage() {
+  return (
+    <RoleGate module="ai">
+      <AIIntelligencePageContent />
+    </RoleGate>
   );
 }

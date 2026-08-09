@@ -1,25 +1,39 @@
 "use client";
 import Link from "next/link";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Plus, Search, Edit2, Trash2, Barcode, X, Package, Check, 
   MoreVertical, Filter, Download, LineChart
 } from "lucide-react";
-
-// Mock Data
-const MOCK_PRODUCTS = [
-  { id: "PRD-001", name: "Organic Green Tea", sku: "OGT-100", category: "Beverages", stock: 150, price: 450, status: "In Stock" },
-  { id: "PRD-002", name: "Vegan Protein Powder", sku: "VPP-500", category: "Supplements", stock: 12, price: 1200, status: "Low Stock" },
-  { id: "PRD-003", name: "Almond Milk 1L", sku: "ALM-1L", category: "Dairy Alternatives", stock: 0, price: 280, status: "Out of Stock" },
-  { id: "PRD-004", name: "Gluten-Free Oats", sku: "GFO-250", category: "Pantry", stock: 85, price: 150, status: "In Stock" },
-  { id: "PRD-005", name: "Cold Pressed Olive Oil", sku: "CPO-500", category: "Oils", stock: 34, price: 850, status: "In Stock" },
-];
+import { getProducts } from "@/lib/api";
+import type { ProductOut } from "@/lib/backend-types";
 
 export default function ProductsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [products, setProducts] = useState<ProductOut[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        setLoading(true);
+        const data = await getProducts();
+        setProducts(data);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  const filteredProducts = products.filter(p => 
+    (p.name && p.name.toLowerCase().includes(searchTerm.toLowerCase())) || 
+    (p.sku && p.sku.toLowerCase().includes(searchTerm.toLowerCase())) || 
+    (p.category && p.category.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
   return (
     <div className="space-y-6 pb-12 max-w-7xl mx-auto">
@@ -90,58 +104,68 @@ export default function ProductsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {MOCK_PRODUCTS.map((product) => (
-                <tr key={product.id} className="hover:bg-slate-50 transition-colors group">
-                  <td className="px-6 py-4">
-                    <div className="font-medium text-slate-900">{product.name}</div>
-                    <div className="text-xs text-slate-500">{product.id}</div>
-                  </td>
-                  <td className="px-6 py-4 text-slate-600">{product.sku}</td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center px-2 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-medium">
-                      {product.category}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right font-medium text-slate-900">
-                    {product.price.toLocaleString('en-IN')}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <span className={`font-medium ${product.stock < 20 ? (product.stock === 0 ? 'text-red-500' : 'text-orange-500') : 'text-slate-700'}`}>
-                      {product.stock}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
-                      product.status === 'In Stock' ? 'bg-green-100 text-green-700' :
-                      product.status === 'Low Stock' ? 'bg-orange-100 text-orange-700' :
-                      'bg-red-100 text-red-700'
-                    }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${
-                        product.status === 'In Stock' ? 'bg-green-500' :
-                        product.status === 'Low Stock' ? 'bg-orange-500' :
-                        'bg-red-500'
-                      }`}></span>
-                      {product.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button className="p-1.5 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-md transition-colors">
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                      <Link href={`/dashboard/products/${product.id}`} className="p-1.5 text-slate-400 hover:text-brand-green hover:bg-green-50 rounded-md transition-colors" title="Analytics">
-                        <LineChart className="w-4 h-4" />
-                      </Link>
-                      <button className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors">
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
-                    </div>
+              {loading ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <tr key={i} className="animate-pulse">
+                    <td className="px-6 py-4"><div className="h-4 bg-slate-200 rounded w-32 mb-2"></div><div className="h-3 bg-slate-200 rounded w-24"></div></td>
+                    <td className="px-6 py-4"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
+                    <td className="px-6 py-4"><div className="h-4 bg-slate-200 rounded w-24"></div></td>
+                    <td className="px-6 py-4 text-right"><div className="h-4 bg-slate-200 rounded w-16 ml-auto"></div></td>
+                    <td className="px-6 py-4 text-right"><div className="h-4 bg-slate-200 rounded w-12 ml-auto"></div></td>
+                    <td className="px-6 py-4"><div className="h-4 bg-slate-200 rounded w-20"></div></td>
+                    <td className="px-6 py-4"></td>
+                  </tr>
+                ))
+              ) : filteredProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-slate-500">
+                    No products yet. Add your first product.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredProducts.map((product) => (
+                  <tr key={product.id} className="hover:bg-slate-50 transition-colors group">
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-slate-900">{product.name}</div>
+                      <div className="text-xs text-slate-500">{product.id}</div>
+                    </td>
+                    <td className="px-6 py-4 text-slate-600">{product.sku || '-'}</td>
+                    <td className="px-6 py-4">
+                      <span className="inline-flex items-center px-2 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-medium">
+                        {product.category || '-'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right font-medium text-slate-900">
+                      {product.selling_price != null ? product.selling_price.toLocaleString('en-IN') : '-'}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <span className="font-medium text-slate-700">-</span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                        -
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button className="p-1.5 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-md transition-colors">
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                        <Link href={`/dashboard/products/${product.id}`} className="p-1.5 text-slate-400 hover:text-brand-green hover:bg-green-50 rounded-md transition-colors" title="Analytics">
+                          <LineChart className="w-4 h-4" />
+                        </Link>
+                        <button className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors">
+                          <MoreVertical className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

@@ -1,7 +1,10 @@
 "use client";
+import RoleGate from '@/components/layout/RoleGate';
 
-import React from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { 
   Leaf, 
   Wind, 
@@ -9,17 +12,41 @@ import {
   Recycle, 
   TrendingUp,
   Download,
-  Share2
+  Share2,
+  Activity,
+  PackageCheck,
+  PackageMinus,
+  AlertTriangle
 } from 'lucide-react';
+import { getGreenScoreCurrent, getGreenScoreHistory } from '@/lib/api';
+import type { GreenScoreOut, GreenScoreHistoryPoint } from '@/lib/backend-types';
 
-const sustainMetrics = [
-  { title: "Carbon Offset", value: "24.5", unit: "tons", change: "+2.1", icon: Wind, color: "text-emerald-500", bg: "bg-emerald-50" },
-  { title: "Water Saved", value: "128", unit: "kL", change: "+14", icon: Droplets, color: "text-blue-500", bg: "bg-blue-50" },
-  { title: "Waste Diverted", value: "85", unit: "%", change: "+5%", icon: Recycle, color: "text-amber-500", bg: "bg-amber-50" },
-  { title: "Green Score", value: "84", unit: "/100", change: "+7", icon: Leaf, color: "text-[#0FA958]", bg: "bg-[#0FA958]/10" }
-];
+function SustainabilityPageContent() {
+  const [current, setCurrent] = useState<GreenScoreOut | null>(null);
+  const [history, setHistory] = useState<GreenScoreHistoryPoint[]>([]);
+  const [loading, setLoading] = useState(true);
 
-export default function SustainabilityPage() {
+  useEffect(() => {
+    async function loadData() {
+      setLoading(true);
+      try {
+        const [c, h] = await Promise.all([getGreenScoreCurrent(), getGreenScoreHistory()]);
+        setCurrent(c);
+        setHistory(h);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
+
+  const sustainMetrics = current ? [
+    { title: "Expiry Prevention", value: current.expiry_score, unit: "/100", icon: PackageCheck, color: "text-emerald-500", bg: "bg-emerald-50", change: "+0%" },
+    { title: "Inventory Efficiency", value: current.inventory_score, unit: "/100", icon: Activity, color: "text-blue-500", bg: "bg-blue-50", change: "+0%" },
+    { title: "Dead Stock Control", value: current.dead_stock_score, unit: "/100", icon: PackageMinus, color: "text-amber-500", bg: "bg-amber-50", change: "+0%" },
+    { title: "Waste Prevention", value: current.waste_score, unit: "/100", icon: Recycle, color: "text-[#0FA958]", bg: "bg-[#0FA958]/10", change: "+0%" }
+  ] : [];
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -61,13 +88,13 @@ export default function SustainabilityPage() {
           
           <div className="flex flex-wrap items-center gap-4">
             <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/10 flex-1 min-w-[200px]">
-              <div className="text-green-200 text-sm font-medium mb-1">Current Goal: Net Zero</div>
+              <div className="text-green-200 text-sm font-medium mb-1">Overall Green Score</div>
               <div className="w-full bg-black/20 rounded-full h-2.5 mt-3">
-                <div className="bg-[#0FA958] h-2.5 rounded-full shadow-[0_0_10px_rgba(15,169,88,0.8)]" style={{ width: '65%' }}></div>
+                <div className="bg-[#0FA958] h-2.5 rounded-full shadow-[0_0_10px_rgba(15,169,88,0.8)]" style={{ width: `${current?.score ?? 0}%` }}></div>
               </div>
               <div className="flex justify-between text-xs text-green-100 mt-2">
-                <span>65% Achieved</span>
-                <span>Target: 2027</span>
+                <span>{current?.score ?? 0} / 100</span>
+                <span>Target: 95</span>
               </div>
             </div>
           </div>
@@ -96,12 +123,6 @@ export default function SustainabilityPage() {
                 <metric.icon className={`w-5 h-5 ${metric.color}`} />
               </div>
             </div>
-            <div className="mt-4 flex items-center gap-2">
-              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-600 flex items-center gap-1">
-                <TrendingUp className="w-3 h-3" /> {metric.change}
-              </span>
-              <span className="text-xs text-slate-400">vs last month</span>
-            </div>
           </motion.div>
         ))}
       </div>
@@ -114,34 +135,31 @@ export default function SustainabilityPage() {
           transition={{ delay: 0.6 }}
           className="lg:col-span-2 bg-white rounded-xl border border-slate-100 shadow-sm p-6"
         >
-          <h3 className="text-lg font-semibold text-slate-900 mb-6">Emissions Reduction Trend</h3>
-          <div className="h-64 flex items-end justify-between gap-2 pb-6 border-b border-slate-100 relative">
-            {/* Simple Bar Chart Mockup */}
-            {[45, 52, 38, 65, 48, 75, 84].map((height, i) => (
-              <div key={i} className="flex-1 flex flex-col items-center gap-2 group">
-                <div className="w-full relative bg-slate-50 rounded-t-sm h-full flex items-end">
-                  <div 
-                    className="w-full bg-[#0FA958]/20 group-hover:bg-[#0FA958] rounded-t-sm transition-all duration-300 relative"
-                    style={{ height: `${height}%` }}
-                  >
-                    <div className="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs py-1 px-2 rounded shadow whitespace-nowrap transition-opacity">
-                      {height} units
-                    </div>
-                  </div>
-                </div>
-                <span className="text-xs text-slate-400">Month {i+1}</span>
+          <h3 className="text-lg font-semibold text-slate-900 mb-6">Green Score History</h3>
+          <div className="h-64 flex items-end justify-between gap-2 pb-6 relative">
+            {loading ? (
+              <div className="w-full h-full flex items-center justify-center">
+                <div className="animate-spin w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full" />
               </div>
-            ))}
-          </div>
-          <div className="mt-4 flex items-center justify-center gap-6 text-sm">
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-[#0FA958]"></span>
-              <span className="text-slate-600">Actual Reduction</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-[#0FA958]/20 border border-[#0FA958] border-dashed"></span>
-              <span className="text-slate-600">Target</span>
-            </div>
+            ) : history.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={history} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                  <XAxis dataKey="period_date" tickFormatter={val => val.slice(5)} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} dy={10} />
+                  <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} />
+                  <Tooltip 
+                    formatter={(value: any) => [value, 'Green Score']}
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                  />
+                  <Line type="monotone" dataKey="score" stroke="#10b981" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center text-slate-500">
+                <Leaf className="w-8 h-8 mb-2 opacity-50" />
+                <p>No history data available</p>
+              </div>
+            )}
           </div>
         </motion.div>
 
@@ -151,36 +169,25 @@ export default function SustainabilityPage() {
           transition={{ delay: 0.7 }}
           className="bg-white rounded-xl border border-slate-100 shadow-sm p-6"
         >
-          <h3 className="text-lg font-semibold text-slate-900 mb-6">AI Recommendations</h3>
+          <h3 className="text-lg font-semibold text-slate-900 mb-6">Environmental Tracking</h3>
           <div className="space-y-4">
-            <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-100">
-              <div className="flex gap-3">
-                <div className="mt-0.5"><Leaf className="w-5 h-5 text-emerald-600" /></div>
-                <div>
-                  <h4 className="text-sm font-semibold text-emerald-900">Switch Supplier for Packaging</h4>
-                  <p className="text-xs text-emerald-700 mt-1">Sourcing from "EcoPack Inc" reduces carbon footprint by 15% and cuts costs by 2%.</p>
-                  <button className="mt-3 text-xs font-medium bg-emerald-600 text-white px-3 py-1.5 rounded hover:bg-emerald-700 transition-colors">
-                    Review Options
-                  </button>
-                </div>
-              </div>
-            </div>
-            
-            <div className="p-4 rounded-lg bg-blue-50 border border-blue-100">
-              <div className="flex gap-3">
-                <div className="mt-0.5"><Wind className="w-5 h-5 text-blue-600" /></div>
-                <div>
-                  <h4 className="text-sm font-semibold text-blue-900">Optimize Delivery Routes</h4>
-                  <p className="text-xs text-blue-700 mt-1">Batching Friday deliveries can save approximately 4.2 tons of CO2 this month.</p>
-                  <button className="mt-3 text-xs font-medium bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition-colors">
-                    Apply Schedule
-                  </button>
-                </div>
-              </div>
+            <div className="p-6 rounded-lg bg-slate-50 border border-slate-200 text-center flex flex-col items-center">
+              <AlertTriangle className="w-8 h-8 text-amber-500 mb-2" />
+              <h4 className="text-sm font-semibold text-slate-700">Coming Soon</h4>
+              <p className="text-xs text-slate-500 mt-2">Environmental impact tracking for Carbon, Water, and specific waste parameters is coming in a future update.</p>
             </div>
           </div>
         </motion.div>
       </div>
     </div>
+  );
+}
+
+
+export default function SustainabilityPage() {
+  return (
+    <RoleGate module="sustainability">
+      <SustainabilityPageContent />
+    </RoleGate>
   );
 }

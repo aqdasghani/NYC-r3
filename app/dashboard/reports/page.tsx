@@ -1,4 +1,6 @@
 "use client";
+import RoleGate from '@/components/layout/RoleGate';
+
 
 import React, { useState, useEffect } from "react";
 import { Download, Printer, BarChart2, TrendingUp, Package, ShoppingCart, Loader2 } from "lucide-react";
@@ -22,7 +24,7 @@ function exportCSV(data: object[], filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export default function ReportsPage() {
+function ReportsPageContent() {
   const [period, setPeriod] = useState("This Month");
   const [monthly, setMonthly] = useState<MonthlyComparison | null>(null);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -188,5 +190,14 @@ export default function ReportsPage() {
       </div>
 
     </div>
+  );
+}
+
+
+export default function ReportsPage() {
+  return (
+    <RoleGate module="reports">
+      <ReportsPageContent />
+    </RoleGate>
   );
 }

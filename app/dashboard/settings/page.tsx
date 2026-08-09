@@ -1,17 +1,19 @@
 "use client";
+import RoleGate from '@/components/layout/RoleGate';
 
-import React, { useState } from "react";
+
+import React, { useState, useEffect } from "react";
 import { Store, User, Shield, Plus, MoreHorizontal, Edit, Trash2, Mail, Phone, MapPin } from "lucide-react";
+import { getCurrentUser } from "@/lib/api-client";
+import type { UserOut } from "@/lib/backend-types";
 
-const MOCK_USERS = [
-  { id: 1, name: "Arjun Mehta", email: "arjun@greenshop.ai", role: "Admin", status: "Active" },
-  { id: 2, name: "Priya Sharma", email: "priya@greenshop.ai", role: "Store Manager", status: "Active" },
-  { id: 3, name: "Rahul Verma", email: "rahul@greenshop.ai", role: "Inventory Clerk", status: "Offline" },
-  { id: 4, name: "Neha Gupta", email: "neha@greenshop.ai", role: "Store Manager", status: "Active" },
-];
-
-export default function SettingsPage() {
+function SettingsPageContent() {
   const [activeTab, setActiveTab] = useState("store");
+  const [user, setUser] = useState<UserOut | null>(null);
+
+  useEffect(() => {
+    setUser(getCurrentUser());
+  }, []);
 
   return (
     <div className="space-y-6 pb-12">
@@ -54,11 +56,11 @@ export default function SettingsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-600">Store Name</label>
-                    <input type="text" defaultValue="GreenShop AI - Koramangala" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" />
+                    <input type="text" defaultValue={"GreenShop AI"} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-600">Store ID</label>
-                    <input type="text" defaultValue="GS-KOR-01" disabled className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-500 cursor-not-allowed" />
+                    <input type="text" defaultValue={user?.id || "GS-01"} disabled className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-500 cursor-not-allowed" />
                   </div>
                 </div>
                 
@@ -66,7 +68,7 @@ export default function SettingsPage() {
                   <label className="text-xs font-semibold text-slate-600">Contact Email</label>
                   <div className="relative">
                     <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input type="email" defaultValue="contact@greenshop.ai" className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" />
+                    <input type="email" defaultValue={user?.email || "contact@greenshop.ai"} className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" />
                   </div>
                 </div>
 
@@ -74,7 +76,7 @@ export default function SettingsPage() {
                   <label className="text-xs font-semibold text-slate-600">Phone Number</label>
                   <div className="relative">
                     <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input type="text" defaultValue="+91 98765 43210" className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" />
+                    <input type="text" defaultValue="" className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" />
                   </div>
                 </div>
 
@@ -82,7 +84,7 @@ export default function SettingsPage() {
                   <label className="text-xs font-semibold text-slate-600">Address</label>
                   <div className="relative">
                     <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                    <textarea rows={3} defaultValue="123, 4th Cross, 5th Block, Koramangala, Bengaluru, Karnataka 560095" className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"></textarea>
+                    <textarea rows={3} defaultValue="" className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"></textarea>
                   </div>
                 </div>
 
@@ -100,59 +102,10 @@ export default function SettingsPage() {
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <h3 className="text-base font-bold text-slate-800">Team Members</h3>
-              <button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm">
-                <Plus className="w-4 h-4" />
-                Add User
-              </button>
             </div>
-
             <div className="glass-panel overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-100 text-slate-500">
-                      <th className="px-4 py-3 font-semibold">User</th>
-                      <th className="px-4 py-3 font-semibold">Role</th>
-                      <th className="px-4 py-3 font-semibold">Status</th>
-                      <th className="px-4 py-3 font-semibold text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {MOCK_USERS.map((user) => (
-                      <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">
-                              {user.name.split(' ').map(n => n[0]).join('')}
-                            </div>
-                            <div>
-                              <div className="font-semibold text-slate-800">{user.name}</div>
-                              <div className="text-xs text-slate-500">{user.email}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-slate-600 font-medium">
-                          <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md text-xs">
-                            {user.role}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1.5">
-                            <div className={`w-2 h-2 rounded-full ${user.status === 'Active' ? 'bg-green-500' : 'bg-slate-300'}`}></div>
-                            <span className="text-slate-600 text-xs font-medium">{user.status}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex justify-end gap-2 text-slate-400">
-                            <button className="p-1 hover:text-blue-600 transition-colors rounded"><Edit className="w-4 h-4" /></button>
-                            <button className="p-1 hover:text-red-600 transition-colors rounded"><Trash2 className="w-4 h-4" /></button>
-                            <button className="p-1 hover:text-slate-600 transition-colors rounded"><MoreHorizontal className="w-4 h-4" /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="p-6 text-center text-slate-500 text-sm">
+                User management coming soon.
               </div>
             </div>
           </div>
@@ -217,5 +170,14 @@ export default function SettingsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+
+export default function SettingsPage() {
+  return (
+    <RoleGate module="settings">
+      <SettingsPageContent />
+    </RoleGate>
   );
 }

@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { Activity, Mail, Lock, User, ArrowRight, CheckCircle2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { register, loginWithGoogle } from "@/lib/api-client";
-import { GoogleLogin } from "@react-oauth/google";
+import GoogleAuthButton from "@/components/GoogleAuthButton";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -236,27 +236,18 @@ export default function SignupPage() {
               </div>
 
               <div className="mt-6 flex flex-col gap-3">
-                <GoogleLogin
-                  onSuccess={async (credentialResponse) => {
+                <GoogleAuthButton
+                  text="signup_with"
+                  onSuccess={async (credential) => {
                     try {
                       setError("");
-                      if (credentialResponse.credential) {
-                        await loginWithGoogle(credentialResponse.credential);
-                        router.push("/dashboard");
-                      }
+                      await loginWithGoogle(credential);
+                      router.push("/dashboard");
                     } catch (err: any) {
                       setError(err.message || "Google signup failed");
                     }
                   }}
-                  onError={() => {
-                    setError("Google Signup Failed");
-                  }}
-                  useOneTap
-                  theme="outline"
-                  shape="rectangular"
-                  size="large"
-                  width="100%"
-                  text="signup_with"
+                  onError={() => setError("Google Signup Failed")}
                 />
                 <button type="button" className="w-full inline-flex justify-center py-2.5 px-4 border border-border-default rounded-lg shadow-sm bg-white text-sm font-medium text-text-secondary hover:bg-slate-50 transition-colors">
                   <span className="sr-only">Sign in with Apple</span>

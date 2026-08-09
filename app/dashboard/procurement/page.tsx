@@ -1,4 +1,6 @@
 "use client";
+import RoleGate from '@/components/layout/RoleGate';
+
 
 import React, { useState } from "react";
 import { motion } from "framer-motion";
@@ -26,7 +28,7 @@ const itemVariants = {
   show: { opacity: 1, y: 0, transition: { duration: 0.4 } },
 };
 
-export default function ProcurementPage() {
+function ProcurementPageContent() {
   const [showForm, setShowForm] = useState(false);
   const [items, setItems] = useState<{ id: string, name: string, qty: number, price: number }[]>([]);
   
@@ -247,5 +249,14 @@ export default function ProcurementPage() {
         </div>
       )}
     </motion.div>
+  );
+}
+
+
+export default function ProcurementPage() {
+  return (
+    <RoleGate module="procurement">
+      <ProcurementPageContent />
+    </RoleGate>
   );
 }

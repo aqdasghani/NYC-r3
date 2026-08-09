@@ -1,6 +1,9 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+  // Disabled to prevent FedCM/Google OAuth AbortError caused by React Strict Mode
+  // double-mounting in development. Re-enable after Google's library supports Strict Mode.
+  reactStrictMode: false,
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000',
   },

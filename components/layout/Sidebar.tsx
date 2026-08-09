@@ -23,6 +23,7 @@ import { GreenScoreRing } from "@/components/ui/GreenScoreRing";
 import { SidebarLink } from "./SidebarLink";
 import type { Module } from "@/lib/auth";
 import { hasPermission } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/api-client";
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, module: 'dashboard' },
@@ -52,12 +53,33 @@ function getCurrentRole(): string | undefined {
 
 export function Sidebar() {
   const [role, setRole] = useState<string | undefined>(undefined);
+  const [userName, setUserName] = useState<string | undefined>(undefined);
 
   useEffect(() => {
-    setRole(getCurrentRole());
+    const userRole = getCurrentRole();
+    setRole(userRole);
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('Green Quant_auth');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          setUserName(parsed?.user?.name);
+        }
+      } catch (e) {}
+    }
   }, []);
 
   const visibleItems = NAV_ITEMS.filter((item) => hasPermission(role, item.module as Module));
+
+  const roleColors: Record<string, string> = {
+    OWNER: 'bg-purple-100 text-purple-700',
+    MANAGER: 'bg-blue-100 text-blue-700',
+    BILLER: 'bg-green-100 text-green-700',
+    WORKER: 'bg-yellow-100 text-yellow-700',
+    BILL: 'bg-yellow-100 text-yellow-700',
+  };
+  const roleStyle = role ? roleColors[role] || 'bg-gray-100 text-gray-700' : 'bg-gray-100 text-gray-700';
+
 
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-[68px] flex-col border-r border-line bg-sidebar md:flex lg:w-60">
@@ -91,7 +113,17 @@ export function Sidebar() {
         <div className="hidden justify-center p-3 md:flex lg:hidden">
           <GreenScoreRing value={84} size={44} strokeWidth={6} animate />
         </div>
-        <div className="hidden p-4 lg:block">
+        <div className="hidden p-4 lg:block space-y-3">
+          {userName && role && (
+            <div className="flex items-center gap-3 rounded-xl bg-white/3 p-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-ink truncate">{userName}</p>
+                <span className={`inline-block mt-1 px-2 py-0.5 text-xs font-medium rounded-full ${roleStyle}`}>
+                  {role}
+                </span>
+              </div>
+            </div>
+          )}
           <div className="flex items-center gap-3 rounded-xl bg-white/3 p-3">
             <GreenScoreRing value={84} size={56} strokeWidth={6} animate />
             <div>

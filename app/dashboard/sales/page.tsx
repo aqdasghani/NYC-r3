@@ -6,7 +6,7 @@ import { getToken } from "@/lib/api-client";
 import { formatINR } from "@/lib/utils";
 import { TrendingUp, TrendingDown, DollarSign, Calendar, Clock, BarChart3, PieChart, Activity } from "lucide-react";
 
-type Tab = "Overview" | "Today" | "Hourly" | "Weekly" | "Monthly";
+type Tab = "Overview" | "Today" | "Hourly" | "Weekly" | "Monthly" | "Heatmap";
 
 interface TrendData {
   date: string;
@@ -48,6 +48,7 @@ export default function SalesDashboard() {
   const [hourlyData, setHourlyData] = useState<HourlyData[]>([]);
   const [weeklyData, setWeeklyData] = useState<WeeklyData | null>(null);
   const [monthlyData, setMonthlyData] = useState<MonthlyData | null>(null);
+  const [heatmapData, setHeatmapData] = useState<any[][]>([]);
   
   const [todayRevenue, setTodayRevenue] = useState(0);
 
@@ -105,6 +106,29 @@ export default function SalesDashboard() {
 
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === "Heatmap" && heatmapData.length === 0) {
+      const fetchHeatmap = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+          const token = getToken();
+          const headers = { Authorization: `Bearer ${token}` };
+          const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+          const res = await fetch(`${baseUrl}/api/analytics/heatmap`, { headers });
+          if (!res.ok) throw new Error("Failed to fetch heatmap data");
+          const data = await res.json();
+          setHeatmapData(data.matrix || []);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "An error occurred");
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchHeatmap();
+    }
+  }, [activeTab]);
 
   const peakHour = hourlyData.length > 0 ? hourlyData.reduce((max, h) => h.revenue > max.revenue ? h : max, hourlyData[0]) : null;
 
@@ -173,7 +197,7 @@ export default function SalesDashboard() {
 
       {/* Tabs */}
       <div className="flex gap-2 overflow-x-auto pb-2">
-        {(["Overview", "Today", "Hourly", "Weekly", "Monthly"] as Tab[]).map(tab => (
+        {(["Overview", "Today", "Hourly", "Weekly", "Monthly", "Heatmap"] as Tab[]).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -320,6 +344,61 @@ export default function SalesDashboard() {
                     {monthlyData.growth_pct >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
                     {Math.abs(monthlyData.growth_pct).toFixed(1)}% vs Last Month
                   </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!loading && !error && activeTab === "Heatmap" && (
+          <div>
+            <h3 className="text-lg font-semibold text-slate-800 mb-4">Demand Heatmap</h3>
+            {heatmapData.length === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center text-center text-slate-500">
+                <BarChart3 className="w-8 h-8 mb-2 opacity-50" />
+                <p>No demand data available</p>
+              </div>
+            ) : (
+              <div className="flex flex-col overflow-x-auto">
+                <div className="flex mb-1">
+                  <div className="w-12 shrink-0"></div>
+                  <div className="flex-1 flex justify-between px-1 text-xs text-slate-500">
+                    <span>0</span>
+                    <span>4</span>
+                    <span>8</span>
+                    <span>12</span>
+                    <span>16</span>
+                    <span>20</span>
+                    <span>23</span>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, dayIdx) => (
+                    <div key={day} className="flex items-center gap-2">
+                      <div className="w-10 shrink-0 text-xs font-medium text-slate-500 text-right">{day}</div>
+                      <div className="flex-1 flex gap-1 h-8">
+                        {heatmapData[dayIdx]?.map((cell: any, hrIdx: number) => {
+                          const intensity = Math.min(1, cell.revenue / 5000); // Normalize assuming 5000 is high
+                          return (
+                            <div
+                              key={hrIdx}
+                              className="flex-1 rounded-sm group relative"
+                              style={{ backgroundColor: `rgba(16, 185, 129, ${Math.max(0.05, intensity)})` }}
+                            >
+                              <div className="opacity-0 group-hover:opacity-100 absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-slate-800 text-white text-xs rounded whitespace-nowrap z-10 pointer-events-none transition-opacity">
+                                {day}, {cell.hour}:00 — ₹{cell.revenue} revenue, {cell.units} units
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 flex items-center justify-end gap-2 text-xs text-slate-500">
+                  <span>Low</span>
+                  <div className="w-24 h-3 rounded-full bg-gradient-to-r from-emerald-50 to-emerald-600"></div>
+                  <span>High</span>
                 </div>
               </div>
             )}

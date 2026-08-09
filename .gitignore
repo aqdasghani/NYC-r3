@@ -46,4 +46,10 @@ backend/.venv/
 .claude/
 *.zip
 graphify-out/
-
+convert_ppt_to_pdf.py
+convert_to_pdf.py
+generate_pptx_deck.py
+handbook.html
+ppt_deck.html
+__pycache__/
+*.pyc
