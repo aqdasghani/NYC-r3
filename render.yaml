@@ -3,6 +3,7 @@ services:
   - type: web
     name: greenshop-ai-backend
     env: python
+    plan: free
     region: singapore
     rootDir: backend
     buildCommand: pip install -r requirements.txt
@@ -19,6 +20,7 @@ services:
   - type: web
     name: greenshop-ai-frontend
     env: node
+    plan: free
     region: singapore
     buildCommand: npm install && npm run build
     startCommand: npm start
