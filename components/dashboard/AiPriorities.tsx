@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { motion } from "motion/react";
+import { motion } from "framer-motion";
 import type { RecommendationKind, Risk } from "@/lib/types";
 import { slideRight, stagger } from "@/lib/motion";
 import { cn, formatINR } from "@/lib/utils";

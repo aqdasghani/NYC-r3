@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "motion/react";
+import { motion } from "framer-motion";
 import type { KPI } from "@/lib/types";
 import { fadeUp, stagger } from "@/lib/motion";
 import { useKpiStore } from "@/stores/useKpiStore";

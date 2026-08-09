@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "motion/react";
+import { motion } from "framer-motion";
 import { useWizardStore } from "@/stores/useWizardStore";
 import { Button } from "@/components/ui/Button";
 import { CountUp } from "@/components/ui/CountUp";

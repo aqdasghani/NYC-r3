@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import { useHydrated } from "@/hooks/useHydrated";
 import { useNotificationStore } from "@/stores/useNotificationStore";

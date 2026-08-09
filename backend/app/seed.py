@@ -262,10 +262,12 @@ def _run_seed(db: Session) -> dict:
         add_batch(product, qty, expiry_offset=rng.randint(-15, -1), last_sale_offset=rng.randint(20, 45))
 
     # -- low stock (21) ---------------------------------------------------
+    low_stock_products: list[Product] = []
     for _ in range(21):
         category = rng.choice(CATEGORIES)
         product = add_product(_pick_name(rng, category, used_names), category, rng.uniform(*PRICE_BANDS[category]))
         add_batch(product, rng.randint(2, 5), expiry_offset=rng.randint(40, 90), last_sale_offset=rng.randint(1, 10))
+        low_stock_products.append(product)
 
     # -- overstock (14) ---------------------------------------------------
     overstock_products = [parle]

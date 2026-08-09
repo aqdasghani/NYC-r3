@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "motion/react";
+import { motion } from "framer-motion";
 import { Check, ListChecks, ScanLine, UploadCloud } from "lucide-react";
 import { cn } from "@/lib/utils";
 

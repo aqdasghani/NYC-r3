@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "motion/react";
+import { motion } from "framer-motion";
 import { AlertTriangle, CheckCircle2, Info, X, Zap } from "lucide-react";
 import type { Toast as ToastType, ToastVariant } from "@/lib/types";
 import { cn } from "@/lib/utils";

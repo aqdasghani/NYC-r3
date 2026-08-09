@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "motion/react";
+import { motion } from "framer-motion";
 import { useId } from "react";
 import { EASE } from "@/lib/motion";
 import { cn } from "@/lib/utils";
