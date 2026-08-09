@@ -1,6 +1,7 @@
 """AI action plan: rule-based generation, API execute/dismiss, RBAC."""
 import uuid
-from datetime import date
+
+import pytest
 
 from sqlalchemy import select
 

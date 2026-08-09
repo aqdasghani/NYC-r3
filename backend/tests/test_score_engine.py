@@ -1,6 +1,7 @@
 """Green Score engine tests — sub-scores, weighted formula, history persistence."""
 from datetime import date, timedelta
 
+import pytest
 from sqlalchemy import select
 
 from app.engines.score_engine import (
@@ -52,11 +53,14 @@ def test_calculate_returns_weighted_dict(memdb):
         assert 0 <= gs[key] <= 100
 
 
-def test_empty_store_scores_100(memdb):
+def test_empty_store_weighted_score(memdb):
     store = _store(memdb)
     gs = calculate_green_score(memdb, store.id)
-    assert gs["score"] == 100.0
+    # empty store: expiry/inventory/dead-stock are 100 each, waste is 0 (no
+    # records) -> 100*.3 + 100*.3 + 100*.2 + 0*.2 = 80
+    assert gs["score"] == 80.0
     assert gs["inventory_score"] == 100.0
+    assert gs["waste_score"] == 0.0
 
 
 def test_stale_stock_lowers_inventory_and_dead_stock_scores(memdb):

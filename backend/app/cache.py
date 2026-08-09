@@ -35,7 +35,9 @@ class MemoryCache(Cache):
     def __init__(self) -> None:
         self._store: dict[str, Any] = {}
         self._expiry: dict[str, float] = {}
-        self._lock = threading.Lock()
+        # RLock: incr() holds the lock while calling get(), so the lock must be
+        # re-entrant (a plain Lock deadlocks on the first incr call).
+        self._lock = threading.RLock()
 
     def get(self, key: str) -> Optional[Any]:
         with self._lock:

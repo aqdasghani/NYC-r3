@@ -1,4 +1,6 @@
 """Dashboard/analytics endpoints — order-tolerant assertions against the seeded demo."""
+import pytest
+
 from app.models.database import AIRecommendation
 
 

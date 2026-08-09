@@ -3,6 +3,8 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 
+import pytest
+
 from sqlalchemy import select
 
 from app.engines.detection_engine import (
@@ -76,13 +78,21 @@ def _sales(days_ago_qty_pairs):
 
 
 def test_demand_spike_detector():
-    # prior 4 weeks: 24 units -> 0.857/day; last 7 days: 8/day; low stock on hand
+    # prior 28 days: 30 units -> 1.07/day (>= 0.8 baseline); last 7 days: 8/day
+    # (= 7.5x prior, well past the 1.5x spike threshold); low stock on hand
     sales = _sales([(1, 8), (2, 8), (3, 8), (4, 8), (5, 8), (6, 8), (7, 8),
-                    (10, 2), (12, 2), (14, 2), (20, 4), (25, 4), (28, 4), (30, 4)])
+                    (10, 2), (12, 2), (14, 2), (16, 4), (18, 4), (20, 4), (25, 4), (28, 4), (30, 4)])
     product = _product()
     batches = [_batch_obj(qty=5)]
     detections = detect_product_risks(product, sales, batches)
     assert any(d.risk_type == "Demand Spike" for d in detections)
+
+
+def test_no_false_demand_spike_on_steady_seller():
+    # steady 2/day both windows -> ratio ~1.0, must NOT be a spike
+    sales = _sales([(d, 2) for d in range(1, 31)])
+    detections = detect_product_risks(_product(), sales, [_batch_obj(qty=60)])
+    assert not any(d.risk_type == "Demand Spike" for d in detections)
 
 
 def test_overstock_detector_requires_real_turnover():

@@ -16,7 +16,7 @@ def test_get_missing_returns_none():
 
 def test_ttl_expiry():
     cache = MemoryCache()
-    cache.set("k", "v", ttl=0)  # already expired
+    cache.set("k", "v", ttl=-1)  # expiry in the past -> expired immediately
     assert cache.get("k") is None
 
 

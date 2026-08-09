@@ -20,12 +20,12 @@ export function MarketingLayout({
           </Link>
           
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-text-secondary">
-            <Link href="#product" className="hover:text-text-primary transition-colors">Product</Link>
-            <Link href="#solutions" className="hover:text-text-primary transition-colors">Solutions</Link>
-            <Link href="#features" className="hover:text-text-primary transition-colors">Features</Link>
-            <Link href="#pricing" className="hover:text-text-primary transition-colors">Pricing</Link>
-            <Link href="#resources" className="hover:text-text-primary transition-colors">Resources</Link>
-            <Link href="#about" className="hover:text-text-primary transition-colors">About Us</Link>
+            <Link href="/product" className="hover:text-text-primary transition-colors">Product</Link>
+            <Link href="/solutions" className="hover:text-text-primary transition-colors">Solutions</Link>
+            <Link href="/features" className="hover:text-text-primary transition-colors">Features</Link>
+            <Link href="/pricing" className="hover:text-text-primary transition-colors">Pricing</Link>
+            <Link href="/resources" className="hover:text-text-primary transition-colors">Resources</Link>
+            <Link href="/about" className="hover:text-text-primary transition-colors">About Us</Link>
           </div>
           
           <div className="flex items-center gap-4">
@@ -62,27 +62,27 @@ export function MarketingLayout({
             <div>
               <h4 className="text-text-primary font-bold mb-6">Product</h4>
               <ul className="flex flex-col gap-4 text-sm text-text-secondary">
-                <li><Link href="#" className="hover:text-brand-green transition-colors">Features</Link></li>
-                <li><Link href="#" className="hover:text-brand-green transition-colors">Integrations</Link></li>
-                <li><Link href="#" className="hover:text-brand-green transition-colors">Pricing</Link></li>
+                <li><Link href="/features" className="hover:text-brand-green transition-colors">Features</Link></li>
+                <li><Link href="/product" className="hover:text-brand-green transition-colors">Integrations</Link></li>
+                <li><Link href="/pricing" className="hover:text-brand-green transition-colors">Pricing</Link></li>
               </ul>
             </div>
             
             <div>
               <h4 className="text-text-primary font-bold mb-6">Solutions</h4>
               <ul className="flex flex-col gap-4 text-sm text-text-secondary">
-                <li><Link href="#" className="hover:text-brand-green transition-colors">For Supermarkets</Link></li>
-                <li><Link href="#" className="hover:text-brand-green transition-colors">For Pharmacies</Link></li>
-                <li><Link href="#" className="hover:text-brand-green transition-colors">For Convenience Stores</Link></li>
+                <li><Link href="/solutions" className="hover:text-brand-green transition-colors">For Supermarkets</Link></li>
+                <li><Link href="/solutions" className="hover:text-brand-green transition-colors">For Pharmacies</Link></li>
+                <li><Link href="/solutions" className="hover:text-brand-green transition-colors">For Convenience Stores</Link></li>
               </ul>
             </div>
             
             <div>
               <h4 className="text-text-primary font-bold mb-6">Company</h4>
               <ul className="flex flex-col gap-4 text-sm text-text-secondary">
-                <li><Link href="#" className="hover:text-brand-green transition-colors">About Us</Link></li>
-                <li><Link href="#" className="hover:text-brand-green transition-colors">Careers</Link></li>
-                <li><Link href="#" className="hover:text-brand-green transition-colors">Contact</Link></li>
+                <li><Link href="/about" className="hover:text-brand-green transition-colors">About Us</Link></li>
+                <li><Link href="/about" className="hover:text-brand-green transition-colors">Careers</Link></li>
+                <li><Link href="/resources" className="hover:text-brand-green transition-colors">Contact</Link></li>
               </ul>
             </div>
           </div>

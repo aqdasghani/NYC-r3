@@ -27,7 +27,8 @@ def test_pos_sale_returns_receipt(client, owner_headers, db):
     line = receipt["lines"][0]
     product = db.scalar(select(Product).where(Product.barcode == barcode))
     assert product is not None
-    sold_batch = db.scalar(select(InventoryBatch).where(InventoryBatch.id == line["batch_id"]))
+    # the response serializes batch_id as a string; bind as UUID for the Uuid column
+    sold_batch = db.scalar(select(InventoryBatch).where(InventoryBatch.id == uuid.UUID(line["batch_id"])))
     assert sold_batch is not None
 
 
