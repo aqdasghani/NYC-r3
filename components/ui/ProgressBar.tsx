@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
+import { EASE } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 interface ProgressBarProps {
@@ -21,7 +22,7 @@ export function ProgressBar({ value, className, barClassName, height = 6 }: Prog
         initial={{ width: 0 }}
         whileInView={{ width: `${Math.min(100, Math.max(0, value))}%` }}
         viewport={{ once: true, amount: 0.5 }}
-        transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+        transition={{ duration: 0.9, ease: EASE }}
         className={cn("h-full rounded-full", barClassName ?? "bg-accent")}
       />
     </div>

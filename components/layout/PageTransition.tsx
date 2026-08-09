@@ -2,6 +2,7 @@
 
 import { motion } from "motion/react";
 import { usePathname } from "next/navigation";
+import { EASE } from "@/lib/motion";
 
 /**
  * Enter-only page transition. App Router swaps pages synchronously so there's
@@ -14,7 +15,7 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
       key={pathname}
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+      transition={{ duration: 0.35, ease: EASE }}
     >
       {children}
     </motion.div>

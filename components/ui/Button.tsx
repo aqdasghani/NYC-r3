@@ -1,16 +1,14 @@
 "use client";
 
-import { motion } from "motion/react";
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { motion, type HTMLMotionProps } from "motion/react";
 import { cn } from "@/lib/utils";
 
 type Variant = "primary" | "ghost" | "outline" | "danger";
 type Size = "sm" | "md" | "lg";
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonProps extends HTMLMotionProps<"button"> {
   variant?: Variant;
   size?: Size;
-  children: ReactNode;
 }
 
 const variants: Record<Variant, string> = {

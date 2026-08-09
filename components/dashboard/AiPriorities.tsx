@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { motion } from "motion/react";
 import type { RecommendationKind, Risk } from "@/lib/types";
+import { slideRight, stagger } from "@/lib/motion";
 import { cn, formatINR } from "@/lib/utils";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { useActionStore } from "@/stores/useActionStore";
@@ -10,11 +11,8 @@ import { useKpiStore } from "@/stores/useKpiStore";
 import { useToastStore } from "@/stores/useToastStore";
 import { PriorityItem } from "./PriorityItem";
 
-const container = { hidden: {}, show: { transition: { staggerChildren: 0.1 } } };
-const item = {
-  hidden: { opacity: 0, x: -14 },
-  show: { opacity: 1, x: 0, transition: { duration: 0.45, ease: [0.16, 1, 0.3, 1] } },
-};
+const container = stagger(0.1);
+const item = slideRight;
 
 /** One-click execution from the dashboard — feeds the action engine + KPI bumps. */
 export function AiPriorities({ priorities }: { priorities: Risk[] }) {

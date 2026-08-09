@@ -2,17 +2,12 @@
 
 import { motion } from "motion/react";
 import type { KPI } from "@/lib/types";
+import { fadeUp, stagger } from "@/lib/motion";
 import { useKpiStore } from "@/stores/useKpiStore";
 import { KPICard } from "./KPICard";
 
-const container = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } },
-};
-const item = {
-  hidden: { opacity: 0, y: 16 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } },
-};
+const container = stagger(0.08, 0.1);
+const item = fadeUp;
 
 /** KPI cards driven by the live KPI store so executed actions update them. */
 export function KpiGrid({ kpis: seed }: { kpis: KPI[] }) {

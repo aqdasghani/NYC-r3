@@ -2,6 +2,7 @@
 
 import { motion } from "motion/react";
 import { useId } from "react";
+import { EASE } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { CountUp } from "./CountUp";
 
@@ -69,7 +70,7 @@ export function GreenScoreRing({
             animate ? undefined : { strokeDashoffset: c * (1 - pct) }
           }
           viewport={{ once: true, amount: 0.5 }}
-          transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: 1.5, ease: EASE }}
           style={{ filter: "drop-shadow(0 0 8px rgba(140,198,63,0.45))" }}
         />
       </svg>
