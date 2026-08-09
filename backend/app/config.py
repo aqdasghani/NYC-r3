@@ -17,9 +17,10 @@ class Settings(BaseSettings):
 
     # App
     APP_NAME: str = "GreenShop AI"
+    ENVIRONMENT: str = "development"  # development | demo | production
     DEBUG: bool = True
 
-    # Database — SQLite default, switch to PostgreSQL via full URL.
+    # Database — SQLite default for dev/test, PostgreSQL required for production.
     DATABASE_URL: str = f"sqlite:///{BASE_DIR / 'greenshop.db'}"
     SEED_WITH_SYNTHETIC_DATA: bool = False
 
@@ -27,6 +28,7 @@ class Settings(BaseSettings):
     JWT_SECRET: str = "dev-secret-change-me-in-production"
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRES_MIN: int = 1440  # 24h
+    GOOGLE_CLIENT_ID: str = ""
 
     # Cache (optional Redis; empty -> in-memory)
     REDIS_URL: str = ""
@@ -59,7 +61,24 @@ class Settings(BaseSettings):
 
     @property
     def is_sqlite(self) -> bool:
-        return self.DATABASE_URL.startswith("sqlite")
+        return str(self.DATABASE_URL).startswith("sqlite")
+
+    def validate_production(self) -> None:
+        if self.ENVIRONMENT == "production":
+            db_url = str(self.DATABASE_URL).lower()
+            pg_prefixes = ("postgresql://", "postgres://", "postgresql+psycopg://", "postgresql+psycopg2://")
+            if not self.DATABASE_URL or self.is_sqlite or not db_url.startswith(pg_prefixes):
+                raise ValueError("Production mode requires PostgreSQL DATABASE_URL, not SQLite.")
+            if not self.JWT_SECRET or self.JWT_SECRET == "dev-secret-change-me-in-production":
+                raise ValueError("Production mode requires a secure JWT_SECRET environment variable.")
+            if not self.CORS_ORIGINS or not self.cors_origin_list:
+                raise ValueError("Production mode requires explicit CORS_ORIGINS.")
+            if self.DEBUG:
+                self.DEBUG = False
 
 
 settings = Settings()
+if settings.ENVIRONMENT == "production":
+    settings.validate_production()
+    settings.DEBUG = False
+

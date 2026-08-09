@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from "react";
 import { CheckCircle2, AlertTriangle, Package, Archive, Clock, XCircle, TrendingDown, TrendingUp, RefreshCw } from "lucide-react";
 import { formatINR } from "@/lib/utils";
-import { getToken } from "@/lib/api-client";
+import { apiFetch } from "@/lib/api-client";
+
 
 interface IntelligenceMetrics {
   count: number;
@@ -46,42 +47,26 @@ export default function InventoryDashboard() {
   const [loadingFast, setLoadingFast] = useState(true);
 
   const loadData = async () => {
-    const token = getToken();
-    const headers = { Authorization: `Bearer ${token}` };
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
-
     setLoadingIntel(true);
     setLoadingSlow(true);
     setLoadingFast(true);
 
-    // Intelligence
-    fetch(`${baseUrl}/api/inventory/intelligence`, { headers })
-      .then(res => res.json())
-      .then(data => {
-        // If backend returns empty array or we get error, handle it
-        if (data.healthy) {
-          setIntel(data);
-        } else {
-          setIntel(null);
-        }
-      })
+    apiFetch<IntelligenceData>("/api/inventory/intelligence")
+      .then(data => setIntel(data.healthy ? data : null))
       .catch(() => setIntel(null))
       .finally(() => setLoadingIntel(false));
 
-    // Slow Movers
-    fetch(`${baseUrl}/api/inventory/slow-movers`, { headers })
-      .then(res => res.json())
+    apiFetch<SlowMover[]>("/api/inventory/slow-movers")
       .then(data => setSlowMovers(Array.isArray(data) ? data : []))
       .catch(() => setSlowMovers([]))
       .finally(() => setLoadingSlow(false));
 
-    // Fast Movers
-    fetch(`${baseUrl}/api/inventory/fast-movers`, { headers })
-      .then(res => res.json())
+    apiFetch<FastMover[]>("/api/inventory/fast-movers")
       .then(data => setFastMovers(Array.isArray(data) ? data : []))
       .catch(() => setFastMovers([]))
       .finally(() => setLoadingFast(false));
   };
+
 
   useEffect(() => {
     loadData();

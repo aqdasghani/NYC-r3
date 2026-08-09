@@ -2,15 +2,24 @@
  * Green Quant AI — FastAPI client.
  *
  * Single place that talks to the backend: base URL resolution, Bearer-token
- * storage, demo auto-login, JSON/multipart fetch helpers, and the live
- * WebSocket channel. UI code imports `@/lib/api` (the typed data facade) —
- * only that module and the LiveProvider touch this file.
+ * storage, explicit auth helpers, JSON/multipart fetch helpers, and the live
+ * WebSocket channel.
  */
 import type { TokenResponse, UserOut } from "./backend-types";
 
-export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ??
-  (typeof window !== "undefined" ? window.location.origin : "http://localhost:8000");
+const getApiUrl = (): string => {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, "");
+  }
+  if (typeof window !== "undefined") {
+    const isDev = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+    if (isDev) return "http://localhost:8000";
+    return window.location.origin;
+  }
+  return "";
+};
+
+export const API_URL = getApiUrl();
 
 export const DEMO_CREDENTIALS = {
   email: "rahul@greenshop.ai",
@@ -70,8 +79,6 @@ export function logout(): void {
 
 // --------------------------------------------------------------------- auth
 
-let authPromise: Promise<boolean> | null = null;
-
 /** Log in with explicit credentials and persist the session. */
 export async function login(
   email: string,
@@ -92,7 +99,6 @@ export async function login(
   }
   const data = (await res.json()) as TokenResponse;
   writeAuth({ access_token: data.access_token, user: data.user });
-  authPromise = Promise.resolve(true);
   return data;
 }
 
@@ -113,7 +119,6 @@ export async function loginWithGoogle(token: string): Promise<TokenResponse> {
   }
   const data = (await res.json()) as TokenResponse;
   writeAuth({ access_token: data.access_token, user: data.user });
-  authPromise = Promise.resolve(true);
   return data;
 }
 
@@ -136,32 +141,17 @@ export async function register(
   }
   const data = (await res.json()) as TokenResponse;
   writeAuth({ access_token: data.access_token, user: data.user });
-  authPromise = Promise.resolve(true);
   return data;
 }
 
-/**
- * Guarantee a session before hitting authed endpoints. Uses the demo owner
- * account when nothing is stored so the app "just works" against a seeded
- * backend. Returns false when the backend is unreachable — callers then fall
- * back to local demo data.
- */
+/** Explicit authentication check. Does NOT silently log in as demo user. */
 export function ensureAuth(): Promise<boolean> {
-  if (readAuth()) return Promise.resolve(true);
-  if (!authPromise) {
-    authPromise = login(DEMO_CREDENTIALS.email, DEMO_CREDENTIALS.password)
-      .then(() => true)
-      .catch(() => {
-        authPromise = null; // don't cache a failure — retry next call
-        return false;
-      });
-  }
-  return authPromise;
+  return Promise.resolve(readAuth() !== null);
 }
 
-/** Reset the cached auth attempt (used after a 401 to force a fresh login). */
+/** Reset the cached auth state. */
 export function resetAuth(): void {
-  authPromise = null;
+  logout();
 }
 
 // -------------------------------------------------------------------- fetch
@@ -176,54 +166,53 @@ async function rawFetch(path: string, init: RequestInit = {}): Promise<Response>
 }
 
 /**
- * JSON fetch with the Bearer token attached. Retries once with a fresh demo
- * login after a 401. Throws ApiError on non-2xx.
+ * JSON fetch with the Bearer token attached. Throws ApiError on non-2xx.
  */
 export async function apiFetch<T>(
   path: string,
   init: RequestInit = {}
 ): Promise<T> {
-  const attempt = async (): Promise<Response> => {
-    const auth = readAuth();
-    const headers: Record<string, string> = {
-      ...(init.headers as Record<string, string> | undefined),
-    };
-    if (auth) headers.Authorization = `Bearer ${auth.access_token}`;
-    return rawFetch(path, { ...init, headers });
+  const auth = readAuth();
+  const headers: Record<string, string> = {
+    ...(init.headers as Record<string, string> | undefined),
   };
+  if (auth) headers.Authorization = `Bearer ${auth.access_token}`;
 
-  let res = await attempt();
+  const res = await rawFetch(path, { ...init, headers });
+
   if (res.status === 401) {
-    resetAuth();
-    const ok = await ensureAuth();
-    if (ok) res = await attempt();
+    logout();
+    throw new ApiError(401, "Session expired or unauthorized. Please log in.");
   }
   if (!res.ok) {
-    const detail = await res.text().catch(() => "");
+    let detail = "";
+    try {
+      const parsed = await res.json();
+      detail = parsed.detail || JSON.stringify(parsed);
+    } catch {
+      detail = await res.text().catch(() => "");
+    }
     throw new ApiError(res.status, detail || `Request failed (${res.status})`);
   }
   return (await res.json()) as T;
 }
 
-/** Same as apiFetch but returns the raw text body (CSV/plain). */
+/** Same as apiFetch but returns raw text body. */
 export async function apiFetchText(
   path: string,
   init: RequestInit = {}
 ): Promise<string> {
-  const attempt = async (): Promise<Response> => {
-    const auth = readAuth();
-    const headers: Record<string, string> = {
-      ...(init.headers as Record<string, string> | undefined),
-    };
-    if (auth) headers.Authorization = `Bearer ${auth.access_token}`;
-    return rawFetch(path, { ...init, headers });
+  const auth = readAuth();
+  const headers: Record<string, string> = {
+    ...(init.headers as Record<string, string> | undefined),
   };
+  if (auth) headers.Authorization = `Bearer ${auth.access_token}`;
 
-  let res = await attempt();
+  const res = await rawFetch(path, { ...init, headers });
+
   if (res.status === 401) {
-    resetAuth();
-    const ok = await ensureAuth();
-    if (ok) res = await attempt();
+    logout();
+    throw new ApiError(401, "Session expired or unauthorized. Please log in.");
   }
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
@@ -247,7 +236,7 @@ export async function apiUpload<T>(
   return (await res.json()) as T;
 }
 
-/** Health check — used to decide mock fallback vs live data. */
+/** Health check endpoint. */
 export async function pingBackend(): Promise<boolean> {
   try {
     const res = await rawFetch("/api/health");

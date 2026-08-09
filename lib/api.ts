@@ -340,17 +340,16 @@ function isDemoMode(): boolean {
  * - Returns clean empty state in Production mode to prevent mock data leakage.
  */
 async function liveOr<T>(live: () => Promise<T>, fallback: () => T, emptyFallback?: () => T): Promise<T> {
-  const getFallback = () => {
-    if (isDemoMode()) return fallback();
-    return emptyFallback ? emptyFallback() : fallback();
-  };
-  try {
-    if (!(await ensureAuth())) return getFallback();
-    return await live();
-  } catch {
-    return getFallback();
+  if (isDemoMode()) {
+    try {
+      return await live();
+    } catch {
+      return fallback();
+    }
   }
+  return await live();
 }
+
 
 async function fetchPendingActions(): Promise<ActionOut[]> {
   return apiFetch<ActionOut[]>("/api/actions/?status=PENDING");

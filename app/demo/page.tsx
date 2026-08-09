@@ -7,7 +7,8 @@ import {
   Leaf, RefreshCw, Play, ShieldAlert, Users, LayoutDashboard,
   ShoppingCart, ScanLine, ArrowRight, CheckCircle2, Zap, Package, Sparkles, AlertTriangle
 } from "lucide-react";
-import { login } from "@/lib/api-client";
+import { apiFetch, login } from "@/lib/api-client";
+
 
 export default function DemoPage() {
   const router = useRouter();
@@ -35,14 +36,10 @@ export default function DemoPage() {
     setResetting(true);
     setStatusMessage(null);
     try {
-      const res = await fetch("http://localhost:8000/api/demo/reset", { method: "POST" });
-      if (res.ok) {
-        setStatusMessage("Demo data reset successfully! Restored clean synthetic store dataset.");
-      } else {
-        setStatusMessage("Demo reset endpoint responded with error.");
-      }
-    } catch {
-      setStatusMessage("Could not connect to backend to reset demo data.");
+      await apiFetch("/api/demo/reset", { method: "POST" });
+      setStatusMessage("Demo data reset successfully! Restored clean synthetic store dataset.");
+    } catch (err: any) {
+      setStatusMessage(err?.message || "Could not reset demo data.");
     } finally {
       setResetting(false);
     }
@@ -52,38 +49,28 @@ export default function DemoPage() {
     setSimulating(true);
     setStatusMessage(null);
     try {
-      // Fetch catalog products to perform POS sale simulation
-      const res = await fetch("http://localhost:8000/api/inventory/products?page=1&page_size=5");
-      const pageData = await res.json();
+      const pageData = await apiFetch<any>("/api/inventory/products?page=1&page_size=5");
       const items = (pageData.items || []).map((p: any) => ({
         product_id: p.id,
         quantity: 2
       }));
       if (items.length > 0) {
-        const authRaw = localStorage.getItem("Green Quant_auth");
-        const token = authRaw ? JSON.parse(authRaw).access_token : "";
-        const saleRes = await fetch("http://localhost:8000/api/pos/sale", {
+        await apiFetch("/api/pos/sale", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ items, payment_method: "CASH", amount_paid: 1000 })
         });
-        if (saleRes.ok) {
-          setStatusMessage("Simulated 5 POS Sales! FEFO batch stock deducted & sales recorded.");
-        } else {
-          setStatusMessage("Sale simulation required active authentication.");
-        }
+        setStatusMessage("Simulated 5 POS Sales! FEFO batch stock deducted & sales recorded.");
       } else {
         setStatusMessage("No products found to simulate sales.");
       }
-    } catch {
-      setStatusMessage("Simulation failed — ensure backend is running.");
+    } catch (err: any) {
+      setStatusMessage(err?.message || "Simulation failed.");
     } finally {
       setSimulating(false);
     }
   };
+
 
   const demoAccounts = [
     {

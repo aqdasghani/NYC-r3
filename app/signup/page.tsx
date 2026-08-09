@@ -3,41 +3,40 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Activity, Lock, User, ArrowRight, Store } from "lucide-react";
+import { Activity, Lock, Mail, User, ArrowRight, Store } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { register } from "@/lib/api-client";
+import { getDefaultRoute } from "@/lib/auth";
 
 export default function SignupPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   // Form state
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [storeName, setStoreName] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError("");
 
-    // Bypass auth logic entirely
-    const authObj = {
-      access_token: "mock-token-" + Date.now(),
-      user: {
-        id: "mock-id",
-        email: "store@greenshop.ai",
-        name: name || "Demo User",
-        role: "OWNER",
-        store_id: "mock-store",
-        store_name: storeName || "My Store",
-        is_active: true
-      }
-    };
-    
-    // Slight delay for UX
-    setTimeout(() => {
-      localStorage.setItem("Green Quant_auth", JSON.stringify(authObj));
-      router.push("/dashboard");
-    }, 500);
+    try {
+      const data = await register({
+        name,
+        email,
+        password,
+        store_name: storeName,
+      });
+      router.push(getDefaultRoute(data.user.role));
+    } catch (err: any) {
+      setError(err?.message || "Registration failed. Please check your information and try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -66,6 +65,17 @@ export default function SignupPage() {
           animate={{ opacity: 1, y: 0 }}
           className="glass-panel p-8 sm:p-10"
         >
+          {error && (
+            <div className="mb-6 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 text-sm flex items-start gap-3">
+              <svg className="w-5 h-5 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+              <span>{error}</span>
+            </div>
+          )}
+
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
               <label htmlFor="name" className="block text-sm font-semibold text-text-primary mb-1.5">
@@ -84,6 +94,27 @@ export default function SignupPage() {
                   onChange={(e) => setName(e.target.value)}
                   className="block w-full pl-10 pr-3 py-2.5 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green transition-all"
                   placeholder="John Doe"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="email" className="block text-sm font-semibold text-text-primary mb-1.5">
+                Email address
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Mail className="h-5 w-5 text-text-muted" />
+                </div>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="block w-full pl-10 pr-3 py-2.5 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green transition-all"
+                  placeholder="you@example.com"
                 />
               </div>
             </div>

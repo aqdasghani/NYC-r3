@@ -14,7 +14,7 @@ from datetime import date, datetime, timezone
 from typing import Optional
 
 import sqlalchemy as sa
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from ..config import settings
 
@@ -282,6 +282,8 @@ class PurchaseOrder(Base):
     created_at: Mapped[datetime] = mapped_column(sa.DateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(sa.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
+    items: Mapped[list[PurchaseOrderItem]] = relationship("PurchaseOrderItem", back_populates="purchase_order", cascade="all, delete-orphan")
+
 
 class PurchaseOrderItem(Base):
     __tablename__ = "purchase_order_items"
@@ -293,6 +295,8 @@ class PurchaseOrderItem(Base):
     unit_price: Mapped[Optional[float]] = mapped_column(sa.Numeric(10, 2), nullable=True)
     received_quantity: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=0)
 
+    purchase_order: Mapped[PurchaseOrder] = relationship("PurchaseOrder", back_populates="items")
+
 
 class StockTransfer(Base):
     __tablename__ = "stock_transfers"
@@ -300,9 +304,11 @@ class StockTransfer(Base):
     id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
     source_store_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("stores.id"), nullable=False)
     destination_store_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("stores.id"), nullable=False)
-    status: Mapped[str] = mapped_column(sa.String(50), nullable=False, default="PENDING")  # PENDING/SHIPPED/RECEIVED/CANCELLED
+    status: Mapped[str] = mapped_column(sa.String(50), nullable=False, default="PENDING")  # PENDING/SHIPPED/RECEIVED/CANCELLED/COMPLETED
     transfer_date: Mapped[datetime] = mapped_column(sa.DateTime, nullable=False, default=utcnow)
     created_at: Mapped[datetime] = mapped_column(sa.DateTime, nullable=False, default=utcnow)
+
+    items: Mapped[list[StockTransferItem]] = relationship("StockTransferItem", back_populates="stock_transfer", cascade="all, delete-orphan")
 
 
 class StockTransferItem(Base):
@@ -313,6 +319,8 @@ class StockTransferItem(Base):
     product_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("products.id"), nullable=False)
     batch_id: Mapped[Optional[uuid.UUID]] = mapped_column(sa.Uuid, sa.ForeignKey("inventory_batches.id"), nullable=True)
     quantity: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=1)
+
+    stock_transfer: Mapped[StockTransfer] = relationship("StockTransfer", back_populates="items")
 
 
 class Return(Base):
@@ -326,6 +334,8 @@ class Return(Base):
     reason: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
     return_date: Mapped[datetime] = mapped_column(sa.DateTime, nullable=False, default=utcnow)
 
+    items: Mapped[list[ReturnItem]] = relationship("ReturnItem", back_populates="return_obj", cascade="all, delete-orphan")
+
 
 class ReturnItem(Base):
     __tablename__ = "return_items"
@@ -337,6 +347,9 @@ class ReturnItem(Base):
     quantity: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=1)
     refund_amount: Mapped[float] = mapped_column(sa.Numeric(10, 2), nullable=False, default=0.0)
     condition: Mapped[str] = mapped_column(sa.String(50), nullable=False, default="SELLABLE")  # SELLABLE/DAMAGED/EXPIRED
+
+    return_obj: Mapped[Return] = relationship("Return", back_populates="items")
+
 
 
 class AuditLog(Base):

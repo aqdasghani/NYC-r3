@@ -26,23 +26,12 @@ export default function LoginPage() {
       const data = await login(email, password);
       router.push(getDefaultRoute(data.user.role));
     } catch (err: any) {
-      // Bypass auth logic if the backend is unreachable or failing
-      const authObj = {
-        access_token: "mock-token-" + Date.now(),
-        user: {
-          id: "mock-id",
-          email: email,
-          name: email === "rahul@greenshop.ai" ? "Rahul Sharma" : "Demo User",
-          role: "OWNER",
-          store_id: "mock-store",
-          store_name: "GreenShop Main",
-          is_active: true
-        }
-      };
-      localStorage.setItem("Green Quant_auth", JSON.stringify(authObj));
-      router.push("/dashboard");
+      setError(err?.message || "Invalid credentials or login failed. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
+
 
   return (
     <div className="min-h-screen bg-bg-app flex flex-col justify-center py-12 sm:px-6 lg:px-8 selection:bg-brand-green/30 selection:text-brand-green-dark">

@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { Search, ShoppingBag, Plus, Minus, Trash2, CreditCard, Banknote, Receipt, CheckCircle, Printer, X, Monitor, Camera, ScanLine } from "lucide-react";
-import { getToken } from "@/lib/api-client";
+import { apiFetch } from "@/lib/api-client";
+
 import { formatINR } from "@/lib/utils";
 import { BarcodeScanner } from "@/components/scanner/BarcodeScanner";
 
@@ -85,20 +86,13 @@ export default function POSPage() {
   const handleBarcodeScanned = async (code: string) => {
     setSearchLoading(true);
     try {
-      const token = getToken();
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
-      const res = await fetch(`${baseUrl}/api/inventory/barcode/${code}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const product = await res.json();
+      const product = await apiFetch<Product>(`/api/inventory/barcode/${code}`);
+      if (product) {
         addToCart(product);
         setSearchTerm("");
-      } else {
-        alert(`Product not found for barcode: ${code}`);
       }
-    } catch (err) {
-      console.error("Barcode lookup failed", err);
+    } catch (err: any) {
+      alert(`Product not found for barcode: ${code}`);
     } finally {
       setSearchLoading(false);
     }
@@ -113,15 +107,8 @@ export default function POSPage() {
       }
       setSearchLoading(true);
       try {
-        const token = getToken();
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
-        const res = await fetch(`${baseUrl}/api/inventory/products?search=${encodeURIComponent(searchTerm)}&page_size=10`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setSearchResults(data.items || []);
-        }
+        const data = await apiFetch<{ items: Product[] }>(`/api/inventory/products?search=${encodeURIComponent(searchTerm)}&page_size=10`);
+        setSearchResults(data.items || []);
       } catch (err) {
         console.error("Failed to search products", err);
       } finally {
@@ -162,9 +149,6 @@ export default function POSPage() {
     
     setCheckoutLoading(true);
     try {
-      const token = getToken();
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
-      
       const payload = {
         payment_method: paymentMethod,
         amount_paid: amountPaid ? parseFloat(amountPaid) : grandTotal,
@@ -176,31 +160,23 @@ export default function POSPage() {
         }))
       };
 
-      const res = await fetch(`${baseUrl}/api/pos/sale`, {
+      const data = await apiFetch<{ invoice: any }>("/api/pos/sale", {
         method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}` 
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
       
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || "Checkout failed");
-      }
-      
-      const data = await res.json();
       setSuccessInvoice(data.invoice);
       setCart([]);
       setAmountPaid("");
       setSearchTerm("");
     } catch (err: any) {
-      alert("Checkout Error: " + err.message);
+      alert("Checkout Error: " + (err.message || "Failed to process sale"));
     } finally {
       setCheckoutLoading(false);
     }
   };
+
 
   if (successInvoice) {
     return (

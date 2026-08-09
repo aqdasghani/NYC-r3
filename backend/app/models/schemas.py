@@ -554,11 +554,43 @@ class CustomerOut(BaseModel):
     created_at: datetime
 
 
+class StoreOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    owner_id: Optional[uuid.UUID] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    store_type: Optional[str] = None
+    is_active: bool = True
+    created_at: datetime
+
+
+class PurchaseOrderItemCreate(BaseModel):
+    product_id: uuid.UUID
+    quantity: int = 1
+    unit_price: Optional[float] = None
+    received_quantity: int = 0
+
+
+class PurchaseOrderItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    po_id: uuid.UUID
+    product_id: uuid.UUID
+    quantity: int
+    unit_price: Optional[float] = None
+    received_quantity: int
+
+
 class PurchaseOrderCreate(BaseModel):
     supplier_id: uuid.UUID
     status: str = "DRAFT"
     total_amount: Optional[float] = None
     expected_delivery_date: Optional[date] = None
+    items: list[PurchaseOrderItemCreate] = []
 
 
 class PurchaseOrderUpdate(BaseModel):
@@ -579,38 +611,29 @@ class PurchaseOrderOut(BaseModel):
     expected_delivery_date: Optional[date] = None
     created_at: datetime
     updated_at: datetime
+    items: list[PurchaseOrderItemOut] = []
 
 
-class PurchaseOrderItemCreate(BaseModel):
-    po_id: uuid.UUID
+class StockTransferItemCreate(BaseModel):
     product_id: uuid.UUID
+    batch_id: Optional[uuid.UUID] = None
     quantity: int = 1
-    unit_price: Optional[float] = None
-    received_quantity: int = 0
 
 
-class PurchaseOrderItemUpdate(BaseModel):
-    po_id: Optional[uuid.UUID] = None
-    product_id: Optional[uuid.UUID] = None
-    quantity: Optional[int] = None
-    unit_price: Optional[float] = None
-    received_quantity: Optional[int] = None
-
-
-class PurchaseOrderItemOut(BaseModel):
+class StockTransferItemOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    po_id: uuid.UUID
+    transfer_id: uuid.UUID
     product_id: uuid.UUID
+    batch_id: Optional[uuid.UUID] = None
     quantity: int
-    unit_price: Optional[float] = None
-    received_quantity: int
 
 
 class StockTransferCreate(BaseModel):
     destination_store_id: uuid.UUID
     status: str = "PENDING"
+    items: list[StockTransferItemCreate] = []
 
 
 class StockTransferUpdate(BaseModel):
@@ -627,30 +650,27 @@ class StockTransferOut(BaseModel):
     status: str
     transfer_date: datetime
     created_at: datetime
+    items: list[StockTransferItemOut] = []
 
 
-class StockTransferItemCreate(BaseModel):
-    transfer_id: uuid.UUID
+class ReturnItemCreate(BaseModel):
     product_id: uuid.UUID
     batch_id: Optional[uuid.UUID] = None
     quantity: int = 1
+    refund_amount: float = 0.0
+    condition: str = "SELLABLE"
 
 
-class StockTransferItemUpdate(BaseModel):
-    transfer_id: Optional[uuid.UUID] = None
-    product_id: Optional[uuid.UUID] = None
-    batch_id: Optional[uuid.UUID] = None
-    quantity: Optional[int] = None
-
-
-class StockTransferItemOut(BaseModel):
+class ReturnItemOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    transfer_id: uuid.UUID
+    return_id: uuid.UUID
     product_id: uuid.UUID
     batch_id: Optional[uuid.UUID] = None
     quantity: int
+    refund_amount: float
+    condition: str
 
 
 class ReturnCreate(BaseModel):
@@ -658,13 +678,7 @@ class ReturnCreate(BaseModel):
     sale_id: Optional[uuid.UUID] = None
     total_refund: float = 0.0
     reason: Optional[str] = None
-
-
-class ReturnUpdate(BaseModel):
-    customer_id: Optional[uuid.UUID] = None
-    sale_id: Optional[uuid.UUID] = None
-    total_refund: Optional[float] = None
-    reason: Optional[str] = None
+    items: list[ReturnItemCreate] = []
 
 
 class ReturnOut(BaseModel):
@@ -677,27 +691,8 @@ class ReturnOut(BaseModel):
     total_refund: float
     reason: Optional[str] = None
     return_date: datetime
+    items: list[ReturnItemOut] = []
 
-
-class ReturnItemCreate(BaseModel):
-    return_id: uuid.UUID
-    product_id: uuid.UUID
-    batch_id: Optional[uuid.UUID] = None
-    quantity: int = 1
-    refund_amount: float = 0.0
-    condition: str = "SELLABLE"
-
-
-class ReturnItemUpdate(BaseModel):
-    return_id: Optional[uuid.UUID] = None
-    product_id: Optional[uuid.UUID] = None
-    batch_id: Optional[uuid.UUID] = None
-    quantity: Optional[int] = None
-    refund_amount: Optional[float] = None
-    condition: Optional[str] = None
-
-
-class ReturnItemOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
