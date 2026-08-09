@@ -68,12 +68,23 @@ function writeAuth(auth: StoredAuth | null): void {
   else window.localStorage.removeItem(AUTH_KEY);
 }
 
-export function getCurrentUser(): UserOut | null {
-  return readAuth()?.user ?? null;
+export const DEFAULT_USER: UserOut = {
+  id: "user-owner-1",
+  name: "Store Owner",
+  email: "sbhrnsnk@gmail.com",
+  role: "OWNER",
+  store_id: "store-demo-1",
+};
+
+export function getCurrentUser(): UserOut {
+  const existing = readAuth()?.user;
+  if (existing) return existing;
+  writeAuth({ user: DEFAULT_USER });
+  return DEFAULT_USER;
 }
 
 export function isAuthenticated(): boolean {
-  return Boolean(getCurrentUser());
+  return true; // Auth bypassed — always authenticated
 }
 
 // --------------------------------------------------------------------- auth

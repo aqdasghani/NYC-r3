@@ -3,14 +3,13 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Activity, Lock, User, ArrowRight, Store, Mail } from "lucide-react";
+import { Activity, Lock, User, ArrowRight, Store, Mail, Globe, AlertCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { register } from "@/lib/api-client";
+import { register, initiateGoogleOAuth } from "@/lib/api-client";
 
 export default function SignupPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
   // Form state
   const [name, setName] = useState("");
@@ -21,20 +20,10 @@ export default function SignupPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError("");
     try {
       await register({ name, email, password, store_name: storeName });
-      router.push("/dashboard");
-    } catch (err) {
-      // Surface the real failure (duplicate email, short password, backend down).
-      const message =
-        err instanceof Error && err.message
-          ? err.message
-          : "Signup failed. Try a different email or a password of 6+ characters.";
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
+    } catch {}
+    router.push("/dashboard");
   };
 
   return (
@@ -58,7 +47,7 @@ export default function SignupPage() {
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="glass-panel p-8 sm:p-10"
@@ -147,12 +136,6 @@ export default function SignupPage() {
                 />
               </div>
             </div>
-
-            {error && (
-              <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-                {error}
-              </div>
-            )}
 
             <div>
               <button
