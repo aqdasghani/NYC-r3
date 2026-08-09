@@ -3,7 +3,7 @@
 import React, { useRef, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Camera, ScanLine, CheckCircle2, AlertTriangle, Upload, RotateCcw, FileText, QrCode, Search, PackagePlus } from "lucide-react";
-import { confirmReceipt, scanInvoice, getProductByBarcode, getProducts } from "@/lib/api";
+import { confirmReceipt, scanInvoice, getProductByBarcode, getProducts, createProduct } from "@/lib/api";
 import { BarcodeScanner } from "@/components/scanner/BarcodeScanner";
 import type { ExtractedItem, ScanInvoiceResponse, ProductOut } from "@/lib/backend-types";
 import { formatINR } from "@/lib/utils";
@@ -29,6 +29,8 @@ export default function ScannerPage() {
   // Barcode / Manual State
   const [scannedProduct, setScannedProduct] = useState<ProductOut | null>(null);
   const [isSearchingBarcode, setIsSearchingBarcode] = useState(false);
+  const [unknownBarcode, setUnknownBarcode] = useState<string | null>(null);
+  const [newProductName, setNewProductName] = useState("");
   const [manualProducts, setManualProducts] = useState<ProductOut[]>([]);
   
   // Manual Entry Form State
@@ -107,6 +109,7 @@ export default function ScannerPage() {
   const handleBarcodeScan = async (code: string) => {
     setIsSearchingBarcode(true);
     setError(null);
+    setUnknownBarcode(null);
     try {
       const prod = await getProductByBarcode(code);
       setScannedProduct(prod);
@@ -114,9 +117,29 @@ export default function ScannerPage() {
       setSelectedProductId(prod.id);
       setManualPrice(prod.purchase_price || 0);
     } catch (err) {
-      setError(`No product found for barcode: ${code}`);
+      setUnknownBarcode(code);
     } finally {
       setIsSearchingBarcode(false);
+    }
+  };
+
+  const handleCreateUnknownProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!unknownBarcode || !newProductName) return;
+    setConfirming(true);
+    setError(null);
+    try {
+      const prod = await createProduct({ name: newProductName, barcode: unknownBarcode });
+      // Now act as if we scanned it successfully
+      setScannedProduct(prod);
+      setSelectedProductId(prod.id);
+      setManualPrice(0);
+      setUnknownBarcode(null);
+      setNewProductName("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create product");
+    } finally {
+      setConfirming(false);
     }
   };
 
@@ -164,6 +187,8 @@ export default function ScannerPage() {
     setError(null);
     setSummary(null);
     setScannedProduct(null);
+    setUnknownBarcode(null);
+    setNewProductName("");
     if (inputRef.current) inputRef.current.value = "";
   };
 
@@ -371,7 +396,14 @@ export default function ScannerPage() {
           <div className="space-y-4">
             {scannedProduct ? (
               <form onSubmit={handleManualReceive} className="glass-panel p-6 space-y-4">
-                <h3 className="text-xl font-bold text-text-primary mb-2">Receive Stock</h3>
+                <div className="flex items-start justify-between mb-2">
+                  <h3 className="text-xl font-bold text-text-primary">Receive Stock</h3>
+                  {scannedProduct.is_new && (
+                    <span className="bg-brand-green/20 text-brand-green px-2 py-1 rounded text-xs font-bold uppercase tracking-wider">
+                      New Product Discovered
+                    </span>
+                  )}
+                </div>
                 <div className="p-4 bg-brand-green/5 border border-brand-green/20 rounded-lg text-sm mb-4">
                   <p className="font-semibold text-brand-green">{scannedProduct.name}</p>
                   <p className="text-text-secondary">Code: {scannedProduct.barcode}</p>
@@ -380,7 +412,7 @@ export default function ScannerPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">Quantity</label>
-                    <input type="number" value={manualQty} onChange={(e) => setManualQty(Number(e.target.value))} required min={1} className="w-full px-3 py-2 border rounded-md" />
+                    <input type="number" autoFocus value={manualQty} onChange={(e) => setManualQty(Number(e.target.value))} required min={1} className="w-full px-3 py-2 border rounded-md" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">Purchase Price</label>
@@ -398,6 +430,37 @@ export default function ScannerPage() {
                 
                 <button type="submit" disabled={confirming} className="w-full bg-brand-green text-black px-4 py-2 rounded-lg font-bold">
                   {confirming ? "Saving..." : "Add to Inventory"}
+                </button>
+              </form>
+            ) : unknownBarcode ? (
+              <form onSubmit={handleCreateUnknownProduct} className="glass-panel p-6 space-y-4">
+                <div className="flex items-center gap-2 mb-2 text-orange-500">
+                  <AlertTriangle className="w-5 h-5" />
+                  <h3 className="text-xl font-bold">Unknown Barcode</h3>
+                </div>
+                <p className="text-text-secondary text-sm">
+                  We couldn't find this product in your catalogue or the global database. Add it manually to start tracking it.
+                </p>
+                <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-lg text-sm mb-4">
+                  <p className="font-semibold text-orange-600">Barcode: {unknownBarcode}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Product Name</label>
+                  <input 
+                    type="text" 
+                    autoFocus
+                    required 
+                    value={newProductName}
+                    onChange={(e) => setNewProductName(e.target.value)}
+                    placeholder="e.g. Lays Classic 50g"
+                    className="w-full px-3 py-2 border rounded-md bg-white text-black" 
+                  />
+                </div>
+                <button type="submit" disabled={confirming} className="w-full bg-brand-green text-black px-4 py-2 rounded-lg font-bold mt-2">
+                  {confirming ? "Saving..." : "Create Product & Continue"}
+                </button>
+                <button type="button" onClick={reset} className="w-full bg-bg-surface text-text-primary border border-border-default px-4 py-2 rounded-lg font-medium hover:bg-slate-50 transition-colors">
+                  Cancel
                 </button>
               </form>
             ) : (

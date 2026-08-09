@@ -8,7 +8,7 @@ export interface UserOut {
   id: string;
   name: string;
   email: string;
-  role: "OWNER" | "MANAGER" | "STAFF";
+  role: "OWNER" | "WORKER" | "BILL";
   store_id: string | null;
 }
 
@@ -31,6 +31,7 @@ export interface ProductOut {
   supplier_id: string | null;
   lead_time_days: number;
   created_at: string;
+  is_new?: boolean;
 }
 
 export interface BatchOut {

@@ -529,6 +529,18 @@ export async function getProductByBarcode(code: string): Promise<ProductOut> {
   return apiFetch<ProductOut>(`/api/inventory/barcode/${code}`);
 }
 
+export async function createProduct(payload: {
+  name: string;
+  barcode?: string;
+  category?: string;
+}): Promise<ProductOut> {
+  return apiFetch<ProductOut>("/api/inventory/products", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
 /** All inventory batches (used by POS to compute per-product stock). */
 export async function getBatches(): Promise<import("./backend-types").BatchOut[]> {
   return liveOr(() => apiFetch<import("./backend-types").BatchOut[]>("/api/inventory/batches"), () => []);

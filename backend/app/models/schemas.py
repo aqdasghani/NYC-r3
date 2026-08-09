@@ -16,7 +16,7 @@ class RegisterRequest(BaseModel):
     email: str
     phone: Optional[str] = None
     password: str = Field(min_length=6, max_length=128)
-    role: Literal["OWNER", "MANAGER", "STAFF"] = "STAFF"
+    role: Literal["OWNER", "WORKER", "BILL"] = "BILL"
     store_name: Optional[str] = None
 
 
@@ -82,6 +82,7 @@ class ProductOut(BaseModel):
     supplier_id: Optional[uuid.UUID] = None
     lead_time_days: int = 2
     created_at: datetime
+    is_new: bool = False
 
 
 class ProductDetailOut(ProductOut):
