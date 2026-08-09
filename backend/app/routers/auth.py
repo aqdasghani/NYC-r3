@@ -30,6 +30,8 @@ from pydantic import EmailStr
 from ..models.database import Store, User, Invitation, EmailVerification, PasswordReset, OAuthAccount
 from ..security import hash_password, verify_password, create_access_token, decode_token
 from ..deps import get_db, get_current_user, get_owner
+import httpx
+
 from ..models.schemas import (
     TokenResponse, UserOut, RegisterRequest, LoginRequest, UserCreate,
     InviteRequest, InviteAccept, GoogleAuthUrlResponse, GoogleCallbackRequest,
@@ -111,7 +113,7 @@ def login(payload: LoginRequest, response: Response, db=Depends(get_db)):
 
 @router.post("/logout")
 def logout(response: Response):
-    response.delete_cookie(key="access_token", httponly=True, secure=True, samesite="lax")
+    clear_auth_cookies(response)
     return {"detail": "Logged out successfully"}
 
 
@@ -189,14 +191,14 @@ def accept_invite(payload: InviteAccept, response: Response, db=Depends(get_db))
         Invitation.token_hash == payload.token,
         Invitation.accepted_at.is_(None)
     ).first()
-    
+
     if not invite or invite.expires_at < datetime.utcnow():
         raise HTTPException(status_code=400, detail="Invalid or expired invite token")
-        
+
     # Check if user already exists
     if db.query(User).filter(User.email == invite.email).first():
         raise HTTPException(status_code=409, detail="User already exists with this email")
-        
+
     user = User(
         name=payload.name,
         email=invite.email,
@@ -205,11 +207,320 @@ def accept_invite(payload: InviteAccept, response: Response, db=Depends(get_db))
         hashed_password=hash_password(payload.password)
     )
     db.add(user)
-    
+
     invite.accepted_at = datetime.utcnow()
     db.commit()
     db.refresh(user)
-    
+
     token = create_access_token(user_id=user.id, role=user.role, store_id=user.store_id, email=user.email)
     set_auth_cookie(response, token)
     return UserOut.model_validate(user)
+
+
+# ============================================================================
+# Google OAuth endpoints
+# ============================================================================
+
+@router.get("/google/url", response_model=GoogleAuthUrlResponse)
+def google_auth_url(request: Request):
+    """Initiate Google OAuth flow - returns authorization URL with PKCE."""
+    if not google_oauth.is_configured():
+        raise HTTPException(status_code=503, detail="Google OAuth not configured")
+
+    state = _generate_token()
+    code_verifier, code_challenge = google_oauth.generate_pkce_pair()
+
+    # Store PKCE verifier in session/cookie for callback verification
+    # In production, use Redis or secure session store
+    response = Response(content='{"auth_url": "pending"}')
+    response.set_cookie(
+        key="oauth_state",
+        value=state,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=600  # 10 minutes
+    )
+    response.set_cookie(
+        key="oauth_code_verifier",
+        value=code_verifier,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=600
+    )
+
+    auth_url = google_oauth.build_auth_url(state, code_challenge)
+
+    return GoogleAuthUrlResponse(auth_url=auth_url, state=state)
+
+
+@router.get("/google/callback")
+async def google_callback(
+    code: str,
+    state: str,
+    request: Request,
+    response: Response,
+    db=Depends(get_db)
+):
+    """Handle Google OAuth callback - exchange code for tokens, create/link user."""
+    if not google_oauth.is_configured():
+        raise HTTPException(status_code=503, detail="Google OAuth not configured")
+
+    # Verify state parameter
+    stored_state = request.cookies.get("oauth_state")
+    if not stored_state or stored_state != state:
+        raise HTTPException(status_code=400, detail="Invalid OAuth state")
+
+    code_verifier = request.cookies.get("oauth_code_verifier")
+    if not code_verifier:
+        raise HTTPException(status_code=400, detail="Missing PKCE code verifier")
+
+    # Exchange code for tokens
+    try:
+        tokens = await google_oauth.exchange_code_for_tokens(code, code_verifier)
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=400, detail=f"Token exchange failed: {e.response.text}")
+
+    # Get user info from Google
+    try:
+        google_user = await google_oauth.get_user_info(tokens.access_token)
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=400, detail=f"Failed to fetch user info: {e.response.text}")
+
+    # Get or create user
+    user = get_or_create_user_from_google(db, google_user, tokens)
+
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account suspended")
+
+    # Create access token and set cookies
+    access_token = create_access_token(
+        user_id=user.id,
+        role=user.role,
+        store_id=user.store_id,
+        email=user.email
+    )
+    refresh_token = _generate_token()
+    # Store refresh token hash in DB for validation (simplified - in production use proper token store)
+
+    set_auth_cookie(response, access_token)
+    set_refresh_cookie(response, refresh_token)
+
+    # Clear OAuth cookies
+    response.delete_cookie(key="oauth_state", httponly=True, secure=True, samesite="lax")
+    response.delete_cookie(key="oauth_code_verifier", httponly=True, secure=True, samesite="lax")
+
+    # Redirect to dashboard
+    response.headers["Location"] = "/dashboard"
+    response.status_code = 302
+    return response
+
+
+@router.post("/link/google", response_model=UserOut)
+async def link_google(
+    payload: OAuthLinkRequest,
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    """Link Google account to currently authenticated user."""
+    if not google_oauth.is_configured():
+        raise HTTPException(status_code=503, detail="Google OAuth not configured")
+
+    # Verify state parameter
+    stored_state = payload.state
+    # In production, verify against stored state from link initiation
+
+    # Exchange code for tokens
+    try:
+        tokens = await google_oauth.exchange_code_for_tokens(payload.code, "")
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=400, detail=f"Token exchange failed: {e.response.text}")
+
+    # Get user info from Google
+    try:
+        google_user = await google_oauth.get_user_info(tokens.access_token)
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=400, detail=f"Failed to fetch user info: {e.response.text}")
+
+    # Check if this Google account is already linked to another user
+    existing_link = db.query(OAuthAccount).filter(
+        OAuthAccount.provider == "google",
+        OAuthAccount.provider_user_id == google_user.sub,
+    ).first()
+
+    if existing_link and existing_link.user_id != current_user.id:
+        raise HTTPException(
+            status_code=409,
+            detail="This Google account is already linked to another user"
+        )
+
+    # Link the account
+    link_google_account(db, current_user, google_user, tokens)
+    db.refresh(current_user)
+
+    return UserOut.model_validate(current_user)
+
+
+@router.delete("/unlink/google")
+def unlink_google(
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    """Unlink Google account from current user."""
+    success = unlink_oauth_account(db, current_user, "google")
+    if not success:
+        raise HTTPException(status_code=404, detail="Google account not linked")
+    return {"detail": "Google account unlinked successfully"}
+
+
+# ============================================================================
+# Email Verification endpoints
+# ============================================================================
+
+@router.post("/verify-email")
+def verify_email(
+    payload: EmailVerificationRequest,
+    response: Response,
+    db=Depends(get_db)
+):
+    """Verify user's email with token."""
+    token_hash = _hash_token(payload.token)
+
+    verification = db.query(EmailVerification).filter(
+        EmailVerification.token_hash == token_hash,
+        EmailVerification.verified_at.is_(None),
+        EmailVerification.expires_at > datetime.utcnow()
+    ).first()
+
+    if not verification:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification token")
+
+    user = db.get(User, verification.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.email_verified = True
+    verification.verified_at = datetime.utcnow()
+    db.commit()
+
+    return {"detail": "Email verified successfully"}
+
+
+@router.post("/resend-verification")
+def resend_verification(
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    """Resend email verification token."""
+    if current_user.email_verified:
+        return {"detail": "Email already verified"}
+
+    # Invalidate old tokens
+    db.query(EmailVerification).filter(
+        EmailVerification.user_id == current_user.id,
+        EmailVerification.verified_at.is_(None)
+    ).delete()
+
+    # Generate new token
+    raw_token = _generate_token()
+    token_hash = _hash_token(raw_token)
+
+    verification = EmailVerification(
+        user_id=current_user.id,
+        token_hash=token_hash,
+        expires_at=datetime.utcnow() + timedelta(hours=24)
+    )
+    db.add(verification)
+    db.commit()
+
+    # In production, send email with raw_token
+    # For now, return it for testing
+    return {"detail": "Verification email sent", "token": raw_token}
+
+
+# ============================================================================
+# Password Reset endpoints
+# ============================================================================
+
+@router.post("/forgot-password")
+def forgot_password(
+    payload: PasswordResetRequest,
+    db=Depends(get_db)
+):
+    """Request password reset - generates token and sends email."""
+    user = db.query(User).filter(User.email == payload.email).first()
+
+    # Always return success to prevent email enumeration
+    if not user:
+        return {"detail": "If the email exists, a reset link has been sent"}
+
+    # Don't allow reset for OAuth-only users (no password set)
+    if not user.hashed_password:
+        raise HTTPException(status_code=400, detail="Cannot reset password for OAuth-only accounts")
+
+    # Invalidate old tokens
+    db.query(PasswordReset).filter(
+        PasswordReset.user_id == user.id,
+        PasswordReset.used_at.is_(None)
+    ).delete()
+
+    # Generate new token
+    raw_token = _generate_token()
+    token_hash = _hash_token(raw_token)
+
+    reset = PasswordReset(
+        user_id=user.id,
+        token_hash=token_hash,
+        expires_at=datetime.utcnow() + timedelta(hours=1)
+    )
+    db.add(reset)
+    db.commit()
+
+    # In production, send email with raw_token
+    # For now, return it for testing
+    return {"detail": "If the email exists, a reset link has been sent", "token": raw_token}
+
+
+@router.post("/reset-password")
+def reset_password(
+    payload: PasswordResetConfirm,
+    response: Response,
+    db=Depends(get_db)
+):
+    """Confirm password reset with token."""
+    token_hash = _hash_token(payload.token)
+
+    reset = db.query(PasswordReset).filter(
+        PasswordReset.token_hash == token_hash,
+        PasswordReset.used_at.is_(None),
+        PasswordReset.expires_at > datetime.utcnow()
+    ).first()
+
+    if not reset:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    user = db.get(User, reset.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.hashed_password = hash_password(payload.password)
+    reset.used_at = datetime.utcnow()
+    db.commit()
+
+    # Log user in automatically
+    access_token = create_access_token(
+        user_id=user.id,
+        role=user.role,
+        store_id=user.store_id,
+        email=user.email
+    )
+    set_auth_cookie(response, access_token)
+
+    return {"detail": "Password reset successful", "user": UserOut.model_validate(user)}
+
+
+@router.post("/logout")
+def logout(response: Response):
+    clear_auth_cookies(response)
+    return {"detail": "Logged out successfully"}

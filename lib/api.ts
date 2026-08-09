@@ -589,10 +589,12 @@ export async function getAtRisk(): Promise<AtRiskItem[]> {
 
 export async function getProducts(search?: string): Promise<ProductOut[]> {
   return liveOr(async () => {
-    const page = await apiFetch<{ items: ProductOut[] }>(
+    const page = await apiFetch<any>(
       `/api/inventory/products?page=1&page_size=100${search ? `&search=${encodeURIComponent(search)}` : ""}`
     );
-    return page.items;
+    if (Array.isArray(page)) return page;
+    if (Array.isArray(page?.items)) return page.items;
+    return [];
   }, () => [], () => []);
 }
 
@@ -719,7 +721,12 @@ export async function postSale(
 /** Raw AI recommendation inbox rows (PENDING/EXECUTED/DISMISSED). */
 export async function getActions(status = "PENDING"): Promise<ActionOut[]> {
   return liveOr(
-    () => apiFetch<ActionOut[]>(`/api/actions/?status=${status}`),
+    async () => {
+      const res = await apiFetch<any>(`/api/actions?status=${status}`);
+      if (Array.isArray(res)) return res;
+      if (Array.isArray(res?.items)) return res.items;
+      return [];
+    },
     () => [],
     () => []
   );

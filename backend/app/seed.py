@@ -32,7 +32,7 @@ from .config import settings
 from .engines.action_engine import _rule_based_recommendations
 from .engines.detection_engine import Detection
 from .models.database import (
-    AIRecommendation, GreenScoreHistory, InventoryBatch, Invoice, InvoiceItem, Product, Sale, Store,
+    AIRecommendation, GreenScoreHistory, InventoryBatch, Invoice, InvoiceItem, Organization, Product, Sale, Store,
     Supplier, User, WasteEvent, create_all, drop_all, utcnow,
 )
 from .security import hash_password
@@ -146,21 +146,26 @@ def _run_seed(db: Session) -> dict:
     rng = random.Random(42)
     today = date.today()
 
+    # --- organization ---------------------------------------------------
+    org = Organization(name="GreenShop Retail", slug="greenshop-retail", plan="free", is_active=True)
+    db.add(org)
+    db.flush()
+
     # --- stores ----------------------------------------------------------
-    store1 = Store(name="Rahul SuperMart", address="12, MG Road", city="Bengaluru",
+    store1 = Store(organization_id=org.id, name="Rahul SuperMart", address="12, MG Road", city="Bengaluru",
                    store_type="Kirana & Grocery", is_active=True)
-    store2 = Store(name="Green Bazaar", address="4, Brigade Road", city="Bengaluru",
+    store2 = Store(organization_id=org.id, name="Green Bazaar", address="4, Brigade Road", city="Bengaluru",
                    store_type="Supermarket", is_active=True)
     db.add_all([store1, store2])
     db.flush()
 
     # --- users -----------------------------------------------------------
     users = [
-        User(name="Rahul Sharma", email="rahul@greenshop.ai", phone="9845012340",
+        User(name="Rahul Sharma", email="rahul@greenshop.ai", phone="9845012340", organization_id=org.id,
              role="OWNER", hashed_password=hash_password("demo1234"), store_id=store1.id),
-        User(name="Priya Verma", email="priya@greenshop.ai", phone="9845012341",
+        User(name="Priya Verma", email="priya@greenshop.ai", phone="9845012341", organization_id=org.id,
              role="MANAGER", hashed_password=hash_password("demo1234"), store_id=store1.id),
-        User(name="Amit Kumar", email="amit@greenshop.ai", phone="9845012342",
+        User(name="Amit Kumar", email="amit@greenshop.ai", phone="9845012342", organization_id=org.id,
              role="STAFF", hashed_password=hash_password("demo1234"), store_id=store1.id),
     ]
     store1.owner_id = users[0].id
@@ -177,7 +182,7 @@ def _run_seed(db: Session) -> dict:
     ]
     suppliers: list[Supplier] = []
     for i, name in enumerate(supplier_names):
-        supplier = Supplier(store_id=store1.id, name=name, contact_phone=f"9845{i+100:04d}0",
+        supplier = Supplier(organization_id=org.id, store_id=store1.id, name=name, contact_phone=f"9845{i+100:04d}0",
                             gst_number=f"29ABCDE{i+1001}F1Z5",
                             on_time_delivery_score=round(rng.uniform(72, 98), 2),
                             expiry_quality_score=round(rng.uniform(65, 95), 2))
@@ -193,7 +198,7 @@ def _run_seed(db: Session) -> dict:
 
     def add_product(name, category, price, quantity_hint=None) -> Product:
         low, high = PRICE_BANDS[category]
-        p = Product(store_id=store1.id, name=name, category=category,
+        p = Product(organization_id=org.id, store_id=store1.id, name=name, category=category,
                     sku=f"GS-{category[:2].upper().replace(' ', '')}-{len(products):05d}",
                     barcode=f"890{100000000 + len(products):09d}",
                     purchase_price=round(price, 2),
@@ -210,7 +215,7 @@ def _run_seed(db: Session) -> dict:
                   last_sale_offset=None, batch_number=None, days_in_store=None, store=None) -> InventoryBatch:
         sid = store.id if store else product.store_id
         b = InventoryBatch(
-            product_id=product.id, store_id=sid,
+            organization_id=org.id, product_id=product.id, store_id=sid,
             batch_number=batch_number or f"B{rng.randint(1000, 9999)}",
             quantity=quantity, expiry_date=today + timedelta(days=expiry_offset),
             purchase_price=price if price is not None else float(product.purchase_price),
@@ -307,7 +312,7 @@ def _run_seed(db: Session) -> dict:
     for _ in range(10):
         category = rng.choice(CATEGORIES)
         low, high = PRICE_BANDS[category]
-        p = Product(store_id=store2.id, name=_pick_name(rng, category, used_names), category=category,
+        p = Product(organization_id=org.id, store_id=store2.id, name=_pick_name(rng, category, used_names), category=category,
                     barcode=f"890{200000000 + len(store2_products):09d}",
                     purchase_price=round(rng.uniform(low, high), 2),
                     selling_price=round(rng.uniform(low, high) * 1.2, 2),
@@ -316,7 +321,7 @@ def _run_seed(db: Session) -> dict:
     db.add_all(store2_products)
     db.flush()
     for p in store2_products:
-        db.add(InventoryBatch(product_id=p.id, store_id=store2.id, quantity=rng.randint(20, 200),
+        db.add(InventoryBatch(organization_id=org.id, product_id=p.id, store_id=store2.id, quantity=rng.randint(20, 200),
                               expiry_date=today + timedelta(days=rng.randint(40, 300)),
                               purchase_price=float(p.purchase_price), received_date=today - timedelta(days=20)))
     db.flush()
@@ -352,14 +357,11 @@ def _run_seed(db: Session) -> dict:
             else:
                 qty = rng.randint(1, 8)
             sale_rows.append(Sale(
-                store_id=store1.id, product_id=product.id,
+                organization_id=org.id, store_id=store1.id, product_id=product.id,
                 batch_id=rng.choice(product_batches).id,
                 quantity_sold=qty,
                 sale_price=float(product.selling_price or 0),
                 gst_amount=round(float(product.selling_price or 0) * qty * 0.12, 2),
-                # Naive-UTC (matching utcnow() used by runtime POS sales) so the
-                # detection engine's UTC windows line up — local time here would
-                # shift "last 7 days" to 8 days and fabricate demand spikes.
                 sale_date=utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
                 - timedelta(days=offset) + timedelta(hours=rng.randint(8, 21)),
             ))
@@ -367,9 +369,6 @@ def _run_seed(db: Session) -> dict:
     db.flush()
 
     # --- mirror the sales as real invoices (analytics/AI read invoices) ----
-    # The detection engine reads the legacy Sale table; the analytics and AI
-    # engines read Invoice/InvoiceItem (what the runtime POS writes). Create a
-    # matching invoice trail so every engine sees the same demo transactions.
     product_by_id = {p.id: p for p in products}
     by_day: dict[date, list[Sale]] = defaultdict(list)
     for s in sale_rows:
@@ -379,8 +378,6 @@ def _run_seed(db: Session) -> dict:
     for _day in sorted(by_day):
         rows = by_day[_day]
         rows.sort(key=lambda s: s.sale_date)
-        # chunk each day into checkout-sized baskets so association analysis
-        # sees realistic multi-item invoices
         i = 0
         while i < len(rows):
             size = rng.randint(2, 6)
@@ -391,7 +388,7 @@ def _run_seed(db: Session) -> dict:
             gst = sum(float(s.gst_amount or 0) for s in chunk)
             grand = subtotal + gst
             invoice = Invoice(
-                invoice_number=f"INV-DEMO-{invoice_no:06d}",
+                organization_id=org.id, invoice_number=f"INV-DEMO-{invoice_no:06d}",
                 store_id=store1.id, cashier_id=users[0].id,
                 subtotal=round(subtotal, 2), total_discount=0.0,
                 total_gst=round(gst, 2), grand_total=round(grand, 2),
@@ -404,7 +401,7 @@ def _run_seed(db: Session) -> dict:
                 p = product_by_id[s.product_id]
                 taxable = float(s.sale_price or 0) * s.quantity_sold
                 db.add(InvoiceItem(
-                    invoice_id=invoice.id, product_id=s.product_id, batch_id=s.batch_id,
+                    organization_id=org.id, invoice_id=invoice.id, product_id=s.product_id, batch_id=s.batch_id,
                     quantity=s.quantity_sold, unit_price=float(s.sale_price or 0),
                     discount_amount=0.0, taxable_amount=round(taxable, 2),
                     gst_rate=float(p.gst_rate or 0), gst_amount=float(s.gst_amount or 0),
@@ -413,10 +410,6 @@ def _run_seed(db: Session) -> dict:
                 ))
             invoice_no += 1
 
-    # Plant one genuine co-purchase pattern (Amul Butter + Britannia Bread) so
-    # the association engine has a real signal to find in the demo — the rest
-    # of the chunking is random, which correctly yields lift ≈ 1. Each affinity
-    # basket also gets a matching Sale row so detection sees the same sales.
     batch_by_product = {b.product_id: b.id for b in batches}
     third_pool = [p for p in products if p.id not in {amul.id, bread.id}]
     for _ in range(60):
@@ -429,7 +422,7 @@ def _run_seed(db: Session) -> dict:
             items.append((extra, batch_by_product.get(extra.id)))
         subtotal = sum(float(p.selling_price or 0) for p, _ in items)
         invoice = Invoice(
-            invoice_number=f"INV-DEMO-{invoice_no:06d}", store_id=store1.id,
+            organization_id=org.id, invoice_number=f"INV-DEMO-{invoice_no:06d}", store_id=store1.id,
             cashier_id=users[0].id, subtotal=round(subtotal, 2), total_discount=0.0,
             total_gst=0.0, grand_total=round(subtotal, 2), payment_method="CASH",
             amount_paid=round(subtotal, 2), change_due=0.0, created_at=ts,
@@ -441,13 +434,13 @@ def _run_seed(db: Session) -> dict:
                 continue
             price = float(p.selling_price or 0)
             db.add(InvoiceItem(
-                invoice_id=invoice.id, product_id=p.id, batch_id=bid,
+                organization_id=org.id, invoice_id=invoice.id, product_id=p.id, batch_id=bid,
                 quantity=1, unit_price=price, discount_amount=0.0,
                 taxable_amount=round(price, 2), gst_rate=0.0, gst_amount=0.0,
                 line_total=round(price, 2), created_at=ts,
             ))
             db.add(Sale(
-                store_id=store1.id, product_id=p.id, batch_id=bid,
+                organization_id=org.id, store_id=store1.id, product_id=p.id, batch_id=bid,
                 quantity_sold=1, sale_price=price, gst_amount=0.0,
                 customer_id=None, sale_date=ts, pos_session_id=None,
             ))
@@ -469,7 +462,7 @@ def _run_seed(db: Session) -> dict:
         detection = make_detection(product, batch, risk_type, severity, value, meta)
         recs = _rule_based_recommendations(detection, product)
         db.add(AIRecommendation(
-            store_id=store1.id, product_id=product.id, batch_id=batch.id,
+            organization_id=org.id, store_id=store1.id, product_id=product.id, batch_id=batch.id,
             risk_type=risk_type, severity=severity, value_at_risk=value,
             recommendation_json=[r.model_dump() for r in recs],
             status="PENDING", created_at=utcnow(),
@@ -481,7 +474,7 @@ def _run_seed(db: Session) -> dict:
     refs = [amul, curd, bread, parle, lays, amul, curd, bread, parle, lays]
     for i, value in enumerate(waste_values):
         db.add(WasteEvent(
-            store_id=store1.id, product_id=refs[i].id, potential_value=value * 1.25,
+            organization_id=org.id, store_id=store1.id, product_id=refs[i].id, potential_value=value * 1.25,
             intervention_type=interventions[i % len(interventions)],
             value_prevented=value, actual_waste=0,
             created_at=datetime.combine(today - timedelta(days=28 - i * 3), datetime.min.time())
@@ -493,7 +486,7 @@ def _run_seed(db: Session) -> dict:
         day = today - timedelta(days=29 - i)
         score = round(72 + 12 * i / 29, 2)
         db.add(GreenScoreHistory(
-            store_id=store1.id, period_date=day, score=score,
+            organization_id=org.id, store_id=store1.id, period_date=day, score=score,
             expiry_score=round(max(0, score - 4), 2), inventory_score=round(max(0, score - 2), 2),
             dead_stock_score=round(max(0, score + 1), 2), waste_score=round(max(0, score - 1), 2),
         ))

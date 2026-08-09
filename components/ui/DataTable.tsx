@@ -73,12 +73,14 @@ export function DataTable<T>({
     setPage(1);
   };
 
+  const safeRows = React.useMemo(() => (Array.isArray(rows) ? rows : []), [rows]);
+
   // Filtering
   const filtered = React.useMemo(() => {
-    if (!search.trim() || !searchText) return rows;
+    if (!search.trim() || !searchText) return safeRows;
     const q = search.toLowerCase();
-    return rows.filter((r) => searchText(r).toLowerCase().includes(q));
-  }, [rows, search, searchText]);
+    return safeRows.filter((r) => searchText(r).toLowerCase().includes(q));
+  }, [safeRows, search, searchText]);
 
   // Sorting
   const sorted = React.useMemo(() => {

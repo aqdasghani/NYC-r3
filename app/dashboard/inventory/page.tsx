@@ -82,30 +82,36 @@ export default function InventoryPage() {
     return unsub;
   }, []);
 
+  const safeInventory = Array.isArray(inventory) ? inventory : [];
+  const safeKpis = Array.isArray(kpis) ? kpis : [];
+  const safeStockHealth = Array.isArray(stockHealth) ? stockHealth : [];
+  const safeAtRisk = Array.isArray(atRisk) ? atRisk : [];
+  const safeDeadStock = Array.isArray(deadStockData) ? deadStockData : [];
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return inventory;
-    return inventory.filter((item) => item.product.name.toLowerCase().includes(q));
-  }, [inventory, query]);
+    if (!q) return safeInventory;
+    return safeInventory.filter((item) => item?.product?.name?.toLowerCase().includes(q));
+  }, [safeInventory, query]);
 
-  const kpiValue = (id: string) => kpis.find((k) => k.id === id)?.value ?? 0;
-  const criticalCount = inventory.filter((i) => i.product.status === "CRITICAL").length;
-  const deadStock = stockHealth.find((s) => s.name === "Dead Stock")?.value ?? 0;
-  const totalQty = inventory.reduce((sum, i) => sum + i.batch.qty, 0);
+  const kpiValue = (id: string) => safeKpis.find((k) => k?.id === id)?.value ?? 0;
+  const criticalCount = safeInventory.filter((i) => i?.product?.status === "CRITICAL").length;
+  const deadStock = safeStockHealth.find((s) => s?.name === "Dead Stock")?.value ?? 0;
+  const totalQty = safeInventory.reduce((sum, i) => sum + (i?.batch?.qty ?? 0), 0);
 
   const stats = [
-    { label: "At-Risk Batches", value: String(inventory.length) },
+    { label: "At-Risk Batches", value: String(safeInventory.length) },
     { label: "Units at Risk", value: totalQty.toLocaleString("en-IN") },
     { label: "Value at Risk", value: formatINR(kpiValue("at_risk")) },
     { label: "Critical Expiry", value: String(criticalCount) },
     { label: "Dead Stock", value: String(deadStock) },
   ];
 
-  const nearExpiryCount = atRisk.filter((i) => i.days_remaining >= 0 && i.days_remaining <= 15).length;
-  const expiredCount = atRisk.filter((i) => i.days_remaining < 0).length;
-  const healthyStockCount = inventory.length - nearExpiryCount - expiredCount - deadStockData.length;
-  const overstockCount = inventory.filter((i) => i.product.status === "OVERSTOCK").length;
-  const lowStockCount = inventory.filter((i) => (i.product.velocityPerDay * 7) >= i.batch.qty).length;
+  const nearExpiryCount = safeAtRisk.filter((i) => (i?.days_remaining ?? 0) >= 0 && (i?.days_remaining ?? 0) <= 15).length;
+  const expiredCount = safeAtRisk.filter((i) => (i?.days_remaining ?? 0) < 0).length;
+  const healthyStockCount = Math.max(0, safeInventory.length - nearExpiryCount - expiredCount - safeDeadStock.length);
+  const overstockCount = safeInventory.filter((i) => i?.product?.status === "OVERSTOCK").length;
+  const lowStockCount = safeInventory.filter((i) => ((i?.product?.velocityPerDay ?? 0) * 7) >= (i?.batch?.qty ?? 0)).length;
 
   const healthCards = [
     { label: "Healthy Stock", value: Math.max(0, healthyStockCount), tone: "text-brand" as const },

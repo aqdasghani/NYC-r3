@@ -251,7 +251,7 @@ export default function ProcurementPage() {
               <div className="glass-panel p-4">
                 <div className="text-sm font-medium text-text-secondary mb-1">Spend (MTD)</div>
                 <div className="text-2xl font-bold text-text-primary">
-                  {loading ? "..." : `₹${summary?.spend_mtd.toLocaleString() ?? 0}`}
+                  {loading ? "..." : `₹${(summary?.spend_mtd ?? 0).toLocaleString("en-IN")}`}
                 </div>
               </div>
               <div className="glass-panel p-4">

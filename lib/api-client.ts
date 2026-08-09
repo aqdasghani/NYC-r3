@@ -434,7 +434,53 @@ function getMockEndpointFallback(path: string, method = "GET", body?: any): any 
     ];
   }
 
-  if (p.includes("/api/inventory/batches") || p.includes("/api/inventory/products")) {
+  if (p.includes("/api/inventory/products")) {
+    const mockProds = [
+      { id: "p-101", name: "Amul Gold Milk 500ml", category: "Dairy", barcode: "8901262010015", selling_price: 34, purchase_price: 31, gst_rate: 0, sku: "DAIRY-001", unit: "pkt", lead_time_days: 1 },
+      { id: "p-102", name: "Mother Dairy Paneer 200g", category: "Dairy", barcode: "8901262020021", selling_price: 90, purchase_price: 78, gst_rate: 0, sku: "DAIRY-002", unit: "pkt", lead_time_days: 1 },
+      { id: "p-103", name: "Nestle Dahi 400g", category: "Dairy", barcode: "8901262030038", selling_price: 45, purchase_price: 38, gst_rate: 0, sku: "DAIRY-003", unit: "pkt", lead_time_days: 2 },
+      { id: "p-104", name: "Britannia Bread 400g", category: "Bakery", barcode: "8901262040044", selling_price: 40, purchase_price: 32, gst_rate: 0, sku: "BAKE-001", unit: "pkt", lead_time_days: 1 },
+      { id: "p-105", name: "Lays Classic Salted 52g", category: "Snacks", barcode: "8901262050050", selling_price: 20, purchase_price: 16, gst_rate: 12, sku: "SNACK-001", unit: "pkt", lead_time_days: 3 }
+    ];
+    return { items: mockProds, total: mockProds.length, page: 1, page_size: 100 };
+  }
+
+  if (p.includes("/api/actions")) {
+    return [
+      {
+        id: "act-101",
+        status: "PENDING",
+        created_at: "2026-08-12T10:00:00Z",
+        recommendations: [
+          {
+            action_type: "DISCOUNT",
+            product_id: "p-1",
+            batch_id: "b-1",
+            discount_pct: 25,
+            suggested_price: 67.5,
+            expected_recovery: 945,
+            rationale: "Near expiry (2 days left). Apply 25% discount to clear 14 units."
+          }
+        ]
+      },
+      {
+        id: "act-102",
+        status: "PENDING",
+        created_at: "2026-08-12T11:30:00Z",
+        recommendations: [
+          {
+            action_type: "TRANSFER",
+            product_id: "p-2",
+            target_store_id: "store-2",
+            quantity: 10,
+            rationale: "Transfer 10 units of Amul Taaza Milk to Koramangala store where demand velocity is +40% higher."
+          }
+        ]
+      }
+    ];
+  }
+
+  if (p.includes("/api/inventory/batches")) {
     return [];
   }
 

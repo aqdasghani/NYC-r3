@@ -136,7 +136,7 @@ export default function BriefingPage() {
     }
   };
 
-  const totalPotentialSavings = actions.reduce((acc, a) => acc + (a.value_at_risk || 0), 0);
+  const totalPotentialSavings = (Array.isArray(actions) ? actions : []).reduce((acc, a) => acc + (a?.value_at_risk || 0), 0);
 
   return (
     <div className="space-y-6 pb-12">

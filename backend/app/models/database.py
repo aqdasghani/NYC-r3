@@ -44,6 +44,18 @@ SessionLocal = sa.orm.sessionmaker(bind=engine, autoflush=False, expire_on_commi
 
 # ----------------------------------------------------------------------- users
 
+class Organization(Base):
+    """Multi-tenant organization — the top-level isolation boundary."""
+    __tablename__ = "organizations"
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(sa.String(255), nullable=False)
+    slug: Mapped[str] = mapped_column(sa.String(100), unique=True, nullable=False, index=True)
+    plan: Mapped[str] = mapped_column(sa.String(50), nullable=False, default="free")  # free, pro, enterprise
+    is_active: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(sa.DateTime, nullable=False, default=utcnow)
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -53,6 +65,7 @@ class User(Base):
     phone: Mapped[Optional[str]] = mapped_column(sa.String(20), unique=True, nullable=True)
     role: Mapped[str] = mapped_column(sa.String(50), nullable=False, default="BILL")  # OWNER/MANAGER/BILLER/WORKER
     hashed_password: Mapped[str] = mapped_column(sa.String(255), nullable=False)  # additive: self-contained JWT
+    organization_id: Mapped[Optional[uuid.UUID]] = mapped_column(sa.Uuid, sa.ForeignKey("organizations.id"), nullable=True, index=True)
     store_id: Mapped[Optional[uuid.UUID]] = mapped_column(sa.Uuid, sa.ForeignKey("stores.id"), nullable=True)
     is_active: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=True)
     last_login: Mapped[Optional[datetime]] = mapped_column(sa.DateTime, nullable=True)
@@ -63,6 +76,7 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("organizations.id"), nullable=False, index=True)
     store_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("stores.id"), nullable=False, index=True)
     user_id: Mapped[Optional[uuid.UUID]] = mapped_column(sa.Uuid, sa.ForeignKey("users.id"), nullable=True)
     action: Mapped[str] = mapped_column(sa.String(255), nullable=False)
@@ -136,6 +150,7 @@ class Store(Base):
     __tablename__ = "stores"
 
     id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("organizations.id"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(sa.String(255), nullable=False)
     owner_id: Mapped[Optional[uuid.UUID]] = mapped_column(sa.Uuid, sa.ForeignKey("users.id"), nullable=True)
     address: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
@@ -151,6 +166,7 @@ class Supplier(Base):
     __tablename__ = "suppliers"
 
     id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("organizations.id"), nullable=False, index=True)
     store_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("stores.id"), nullable=False)
     name: Mapped[str] = mapped_column(sa.String(255), nullable=False)
     contact_person: Mapped[Optional[str]] = mapped_column(sa.String(255), nullable=True)
@@ -169,9 +185,13 @@ class Supplier(Base):
 
 class Product(Base):
     __tablename__ = "products"
-    __table_args__ = (sa.Index("idx_products_store_barcode", "store_id", "barcode"),)
+    __table_args__ = (
+        sa.Index("idx_products_store_barcode", "store_id", "barcode"),
+        sa.Index("idx_products_organization", "organization_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("organizations.id"), nullable=False, index=True)
     store_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("stores.id"), nullable=False)
     name: Mapped[str] = mapped_column(sa.String(255), nullable=False)
     sku: Mapped[Optional[str]] = mapped_column(sa.String(100), nullable=True)
@@ -191,9 +211,11 @@ class InventoryBatch(Base):
     __table_args__ = (
         sa.Index("idx_batches_expiry", "store_id", "expiry_date"),
         sa.Index("idx_batches_product", "product_id", "store_id"),  # additive: velocity path
+        sa.Index("idx_batches_organization", "organization_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("organizations.id"), nullable=False, index=True)
     product_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("products.id"), nullable=False)
     store_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("stores.id"), nullable=False)
     batch_number: Mapped[Optional[str]] = mapped_column(sa.String(100), nullable=True)
@@ -211,9 +233,11 @@ class Sale(Base):
     __table_args__ = (
         sa.Index("idx_sales_date", "store_id", "sale_date"),
         sa.Index("idx_sales_product", "product_id", "sale_date"),
+        sa.Index("idx_sales_organization", "organization_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("organizations.id"), nullable=False, index=True)
     store_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("stores.id"), nullable=False)
     product_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("products.id"), nullable=False)
     batch_id: Mapped[Optional[uuid.UUID]] = mapped_column(sa.Uuid, sa.ForeignKey("inventory_batches.id"), nullable=True)
@@ -229,9 +253,11 @@ class Invoice(Base):
     __tablename__ = "invoices"
     __table_args__ = (
         sa.Index("idx_invoices_date", "store_id", "created_at"),
+        sa.Index("idx_invoices_organization", "organization_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("organizations.id"), nullable=False, index=True)
     invoice_number: Mapped[str] = mapped_column(sa.String(100), unique=True, nullable=False, index=True)
     store_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("stores.id"), nullable=False)
     cashier_id: Mapped[Optional[uuid.UUID]] = mapped_column(sa.Uuid, sa.ForeignKey("users.id"), nullable=True)
@@ -248,7 +274,7 @@ class Invoice(Base):
     change_due: Mapped[int] = mapped_column(sa.Numeric(10, 2), nullable=False, default=0)
 
     created_at: Mapped[datetime] = mapped_column(sa.DateTime, nullable=False, default=utcnow)
-    
+
     # Relationship to items
     items: Mapped[list["InvoiceItem"]] = sa.orm.relationship("InvoiceItem", back_populates="invoice")
 
@@ -257,10 +283,11 @@ class InvoiceItem(Base):
     __tablename__ = "invoice_items"
 
     id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("organizations.id"), nullable=False, index=True)
     invoice_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("invoices.id"), nullable=False)
     product_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("products.id"), nullable=False)
     batch_id: Mapped[Optional[uuid.UUID]] = mapped_column(sa.Uuid, sa.ForeignKey("inventory_batches.id"), nullable=True)
-    
+
     quantity: Mapped[int] = mapped_column(sa.Integer, nullable=False)
     unit_price: Mapped[int] = mapped_column(sa.Numeric(10, 2), nullable=False)
 
@@ -269,9 +296,9 @@ class InvoiceItem(Base):
     gst_rate: Mapped[float] = mapped_column(sa.Numeric(5, 2), nullable=False)
     gst_amount: Mapped[int] = mapped_column(sa.Numeric(10, 2), nullable=False)
     line_total: Mapped[int] = mapped_column(sa.Numeric(10, 2), nullable=False)
-    
+
     created_at: Mapped[datetime] = mapped_column(sa.DateTime, nullable=False, default=utcnow)
-    
+
     invoice: Mapped["Invoice"] = sa.orm.relationship("Invoice", back_populates="items")
 
 
@@ -279,16 +306,17 @@ class InventoryTransaction(Base):
     __tablename__ = "inventory_transactions"
 
     id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("organizations.id"), nullable=False, index=True)
     store_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("stores.id"), nullable=False)
     product_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("products.id"), nullable=False)
     batch_id: Mapped[Optional[uuid.UUID]] = mapped_column(sa.Uuid, sa.ForeignKey("inventory_batches.id"), nullable=True)
-    
+
     # Optional links to triggers
     invoice_id: Mapped[Optional[uuid.UUID]] = mapped_column(sa.Uuid, sa.ForeignKey("invoices.id"), nullable=True)
-    
+
     tx_type: Mapped[str] = mapped_column(sa.String(50), nullable=False) # SALE, RECEIVE, RETURN, SPOILAGE, TRANSFER
     quantity: Mapped[int] = mapped_column(sa.Integer, nullable=False) # positive (receive) or negative (sale/spoilage)
-    
+
     note: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
     performed_by: Mapped[Optional[uuid.UUID]] = mapped_column(sa.Uuid, sa.ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(sa.DateTime, nullable=False, default=utcnow)
@@ -296,9 +324,13 @@ class InventoryTransaction(Base):
 
 class AIRecommendation(Base):
     __tablename__ = "ai_recommendations"
-    __table_args__ = (sa.Index("idx_recommendations_status", "store_id", "status"),)
+    __table_args__ = (
+        sa.Index("idx_recommendations_status", "store_id", "status"),
+        sa.Index("idx_recommendations_organization", "organization_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("organizations.id"), nullable=False, index=True)
     store_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("stores.id"), nullable=False)
     product_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("products.id"), nullable=False)
     batch_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("inventory_batches.id"), nullable=False)
@@ -315,6 +347,7 @@ class WasteEvent(Base):
     __tablename__ = "waste_events"
 
     id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("organizations.id"), nullable=False, index=True)
     store_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("stores.id"), nullable=False)
     product_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("products.id"), nullable=False)
     potential_value: Mapped[int] = mapped_column(sa.Numeric(10, 2), nullable=False)
@@ -328,6 +361,7 @@ class GreenScoreHistory(Base):
     __tablename__ = "green_score_history"
 
     id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("organizations.id"), nullable=False, index=True)
     store_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("stores.id"), nullable=False)
     score: Mapped[float] = mapped_column(sa.Numeric(5, 2), nullable=False)
     expiry_score: Mapped[Optional[float]] = mapped_column(sa.Numeric(5, 2), nullable=True)
@@ -339,9 +373,13 @@ class GreenScoreHistory(Base):
 
 class MonthlyReport(Base):
     __tablename__ = "monthly_reports"
-    __table_args__ = (sa.Index("idx_monthly_reports_store_month", "store_id", "month_year"),)
+    __table_args__ = (
+        sa.Index("idx_monthly_reports_store_month", "store_id", "month_year"),
+        sa.Index("idx_monthly_reports_organization", "organization_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("organizations.id"), nullable=False, index=True)
     store_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("stores.id"), nullable=False)
     month_year: Mapped[str] = mapped_column(sa.String(7), nullable=False)  # YYYY-MM
     total_sales: Mapped[int] = mapped_column(sa.Numeric(12, 2), nullable=False, default=0)

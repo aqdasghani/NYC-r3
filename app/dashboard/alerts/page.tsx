@@ -90,6 +90,8 @@ export default function AlertsPage() {
     }
   };
 
+  const safeActions = Array.isArray(actions) ? actions : [];
+
   return (
     <div className="space-y-6 pb-12">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -123,7 +125,7 @@ export default function AlertsPage() {
             <span className="text-sm font-medium">Loading pending store alerts...</span>
           </div>
         </Card>
-      ) : actions.length === 0 ? (
+      ) : safeActions.length === 0 ? (
         <Card>
           <EmptyState
             icon={<CheckCircle2 className="h-12 w-12 text-success/50" />}
@@ -133,7 +135,7 @@ export default function AlertsPage() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {actions.map((act) => {
+          {safeActions.map((act) => {
             const rec = act.recommendations?.[0];
             const meta = rec ? planMeta(rec) : { icon: AlertTriangle };
             const Icon = meta.icon;
