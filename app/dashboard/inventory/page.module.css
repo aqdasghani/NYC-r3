@@ -1,0 +1,139 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-light);
+  padding-bottom: 16px;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.metricsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+}
+
+.metricCard {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  padding: 20px;
+  box-shadow: 4px 4px 0px var(--border-default);
+}
+
+.metricLabel {
+    font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.metricValue {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.metricTrend {
+    font-size: 10px;
+  margin-top: 8px;
+  font-weight: 700;
+}
+.trendUp { color: var(--brand-green); }
+.trendDown { color: var(--brand-red); }
+
+.contentGrid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+}
+
+.card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  padding: 24px;
+  box-shadow: 4px 4px 0px var(--border-default);
+}
+
+.cardTitle {
+  font-size: 16px;
+  font-weight: 800;
+  margin-bottom: 20px;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-light);
+  padding-bottom: 8px;
+}
+
+.alertList {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.alertItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px dashed var(--border-default);
+  padding-bottom: 12px;
+}
+.alertItem:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.alertText {
+  display: flex;
+  flex-direction: column;
+}
+
+.alertName {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.alertMeta {
+    font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.alertAction {
+  background: var(--text-primary);
+  color: var(--bg-surface);
+  border: none;
+  padding: 6px 12px;
+    font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+.alertAction:hover {
+  background: var(--brand-green);
+}
+
+@media (max-width: 1024px) {
+  .metricsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .contentGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .metricsGrid {
+    grid-template-columns: 1fr;
+  }
+}

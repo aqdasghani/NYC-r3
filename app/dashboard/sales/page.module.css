@@ -1,0 +1,116 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-light);
+  padding-bottom: 16px;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+}
+
+.btnAction {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  padding: 8px 16px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btnAction:hover {
+  background: var(--border-light);
+}
+.btnPrimary {
+  background: var(--brand-green);
+  border-color: var(--brand-green);
+  color: white;
+}
+.btnPrimary:hover {
+  background: #059669;
+  border-color: #059669;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  padding: 24px;
+  box-shadow: 4px 4px 0px var(--border-default);
+}
+
+.cardTitle {
+  font-size: 16px;
+  font-weight: 800;
+  margin-bottom: 20px;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-light);
+  padding-bottom: 8px;
+}
+
+.tableWrapper {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.table th, .table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.table th {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--bg-app);
+}
+
+.table td {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.monoText {
+    font-size: 11px;
+}
+
+.amount {
+    font-weight: 700;
+  text-align: right;
+}
+
+@media (max-width: 1024px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

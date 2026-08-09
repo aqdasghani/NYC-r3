@@ -1,0 +1,40 @@
+.container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 0 12px var(--brand-green-glow));
+}
+
+.bgCircle {
+  stroke: var(--bg-elevated);
+}
+
+.progressCircle {
+  stroke: var(--brand-green);
+  transition: stroke-dashoffset 1.5s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+}
+
+.textContainer {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Outfit', sans-serif;
+}
+
+.score {
+  font-size: 36px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.max {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
