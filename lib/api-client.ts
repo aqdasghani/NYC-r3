@@ -270,6 +270,77 @@ export async function resetPassword(token: string, password: string): Promise<Us
 
 function getMockEndpointFallback(path: string, method = "GET", body?: any): any {
   const p = path.toLowerCase();
+
+  if (p.includes("/api/analytics/dashboard")) {
+    return {
+      kpis: {
+        inventory_value: 480000,
+        inventory_value_delta_pct: 4.2,
+        product_count: 1284,
+        product_count_delta_pct: 12.5,
+        at_risk_count: 37,
+        at_risk_value: 18420,
+        expired_count: 8,
+        expired_value: 2160,
+        waste_prevented_mtd: 142000,
+        today_revenue: 48500,
+        today_orders: 84,
+        today_units: 320,
+        mtd_revenue: 1240000,
+      },
+      donut: [
+        { name: "Good Stock", value: 1012, color: "#10B981" },
+        { name: "Near Expiry", value: 37, color: "#F59E0B" },
+        { name: "Expired", value: 8, color: "#EF4444" },
+        { name: "Low Stock", value: 21, color: "#3B82F6" },
+        { name: "Overstock", value: 14, color: "#111827" },
+        { name: "Dead Stock", value: 192, color: "#6B7280" },
+      ],
+      sales_trend: Array.from({ length: 30 }, (_, i) => ({
+        date: `2026-08-${String(i + 1).padStart(2, "0")}`,
+        revenue: Math.floor(35000 + Math.random() * 25000),
+        units: Math.floor(120 + Math.random() * 80),
+      })),
+      expiry_timeline: [
+        { label: "Today", items: 5, value: 1250 },
+        { label: "Tomorrow", items: 9, value: 3400 },
+        { label: "3-7 Days", items: 23, value: 13770 },
+      ],
+      urgent_actions: [],
+      recent_actions: [],
+      ai_priority: {
+        sell_first: { products: 12, units: 37, value: 4200 },
+        discount: { products: 7, units: 0, value: 2840 },
+        transfer: { products: 0, units: 18, value: 3900 },
+        reorder: { products: 7, units: 0, value: 0 },
+      },
+      ai_insights: [
+        { title: "OVERSTOCK_DETECTED", detail: "5.8 months inventory. Reduce next purchase.", icon: "Package" },
+        { title: "DEMAND_SPIKE", detail: "Lays sales +37% this week.", icon: "TrendingUp" },
+        { title: "WASTE_PRV", detail: "Prevented ₹7,240 potential waste.", icon: "Leaf" },
+      ],
+      mini_kpis: { suppliers: 24, purchase_orders: 12, grn_pending: 5, avg_gross_margin: 18.6 },
+      green_score: {
+        score: 84,
+        expiry_score: 88,
+        inventory_score: 82,
+        dead_stock_score: 80,
+        waste_score: 86,
+        breakdown: [],
+        period_date: "2026-08-12",
+      },
+      daily_brief: {
+        important_actions: 5,
+        est_impact: 3200,
+        sections: [
+          { title: "Urgent", count: 2 },
+          { title: "Action", count: 5 },
+          { title: "Procurement", count: 1 },
+          { title: "Sustainability", count: 7240 },
+        ],
+      },
+    };
+  }
   
   if (p.includes("/api/suppliers/summary")) {
     return {
