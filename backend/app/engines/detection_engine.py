@@ -56,7 +56,7 @@ def detect_risks(batch, sales_history):
     """Evaluate one inventory batch against the three arch §4.1 risk vectors.
 
     ``sales_history`` is a list of quantities (or Sale rows); accepting both
-    makes this function useful in unit tests and in the DB-backed runner.
+    to allow the caller to optimize DB queries.eful in unit tests and in the DB-backed runner.
     """
     quantities = [int(getattr(s, "quantity_sold", s) or 0) for s in sales_history]
     velocity = sum(quantities) / 14 if quantities else 0.0
@@ -80,13 +80,13 @@ def detect_product_risks(product: Product, sales: list[Sale], batches: list[Inve
     if not batches:
         return []
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    last_7 = [s for s in sales if s.sale_date >= now - timedelta(days=7)]
-    last_14 = [s for s in sales if s.sale_date >= now - timedelta(days=14)]
-    prior = [s for s in sales if now - timedelta(days=35) <= s.sale_date < now - timedelta(days=7)]
-    last_avg = sum(s.quantity_sold for s in last_7) / 7
-    prior_avg = sum(s.quantity_sold for s in prior) / 28
+    last_7 = [s for s in sales if getattr(s, "sale_date", now) >= now - timedelta(days=7)]
+    last_14 = [s for s in sales if getattr(s, "sale_date", now) >= now - timedelta(days=14)]
+    prior = [s for s in sales if now - timedelta(days=35) <= getattr(s, "sale_date", now) < now - timedelta(days=7)]
+    last_avg = sum(getattr(s, "quantity_sold", 0) for s in last_7) / 7
+    prior_avg = sum(getattr(s, "quantity_sold", 0) for s in prior) / 28
     total_qty = sum(max(0, b.quantity) for b in batches)
-    velocity = sum(s.quantity_sold for s in last_14) / 14 if last_14 else 0.0
+    velocity = sum(getattr(s, "quantity_sold", 0) for s in last_14) / 14 if last_14 else 0.0
     active_batch = next((b for b in batches if b.quantity > 0), batches[0])
     detections: list[Detection] = []
     # +50% is a real spike; a +30% wobble is just daily-sales boundary noise on

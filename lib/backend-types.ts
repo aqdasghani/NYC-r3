@@ -18,6 +18,28 @@ export interface TokenResponse {
   user: UserOut;
 }
 
+export interface StoreOut {
+  id: string;
+  name: string;
+  owner_id: string | null;
+  address: string | null;
+  city: string | null;
+  phone: string | null;
+  gst_number: string | null;
+  store_type: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface StoreUpdate {
+  name?: string;
+  address?: string;
+  city?: string;
+  phone?: string;
+  gst_number?: string;
+  store_type?: string;
+}
+
 export interface ProductOut {
   id: string;
   store_id: string;
@@ -25,6 +47,7 @@ export interface ProductOut {
   sku: string | null;
   barcode: string | null;
   category: string | null;
+  unit?: string;
   purchase_price: number | null;
   selling_price: number | null;
   gst_rate: number | null;
@@ -158,6 +181,9 @@ export interface DashboardKpis {
   expired_count: number;
   expired_value: number;
   waste_prevented_mtd: number;
+  today_revenue: number;
+  today_orders: number;
+  today_units: number;
 }
 
 export interface AiPriorityAction {
@@ -230,16 +256,56 @@ export interface SupplierOut {
   id: string;
   store_id: string;
   name: string;
-  contact_phone: string | null;
-  email: string | null;
-  gst_number: string | null;
+  contact_person?: string | null;
+  contact_phone?: string | null;
+  email?: string | null;
+  gst_number?: string | null;
+  category?: string | null;
+  address?: string | null;
+  payment_terms?: string | null;
+  lead_time_days?: number;
+  notes?: string | null;
   on_time_delivery_score: number | null;
   expiry_quality_score: number | null;
+  created_at?: string;
+}
+
+export type Supplier = SupplierOut;
+export type Product = ProductOut;
+export type InventoryBatch = BatchOut;
+export interface Store {
+  id: string;
+  name: string;
+  code?: string;
+  address?: string;
+}
+
+export interface SupplierCreate {
+  name: string;
+  contact_person?: string;
+  contact_phone?: string;
+  email?: string;
+  gst_number?: string;
+  category?: string;
+  address?: string;
+  payment_terms?: string;
+  lead_time_days?: number;
+  notes?: string;
+}
+
+export interface SupplierSummary {
+  total_active: number;
+  new_this_month: number;
+  avg_fulfillment: number;
+  pending_orders_count: number;
+  pending_orders_supplier_count: number;
+  issues_delays_count: number;
 }
 
 export interface ReceiptLine {
   product_id: string;
   name: string;
+  unit?: string;
   batch_id: string;
   batch_number: string | null;
   qty: number;
@@ -254,6 +320,7 @@ export interface Receipt {
   store_id: string;
   lines: ReceiptLine[];
   subtotal: number;
+  discount_total: number;
   gst_total: number;
   grand_total: number;
   timestamp: string;
@@ -299,6 +366,18 @@ export interface ConfirmReceiptResponse {
   alerts_triggered: number;
 }
 
+export interface TransactionOut {
+  id: string;
+  product_id: string;
+  product_name: string | null;
+  batch_id: string | null;
+  tx_type: string;
+  quantity: number;
+  note: string | null;
+  performed_by: string | null;
+  created_at: string;
+}
+
 export interface DetectionRunSummary {
   risks_detected: number;
   recommendations_created: number;
@@ -306,4 +385,41 @@ export interface DetectionRunSummary {
 
 export interface MessageOut {
   message: string;
+}
+
+// ---------------------------------------------------------------- procurement
+
+export interface ProcurementSummary {
+  active_pos: number;
+  spend_mtd: number;
+  delayed_deliveries: number;
+}
+
+export interface ProcurementSuggestion {
+  id: string;
+  product_id: string;
+  product: string;
+  supplier: string;
+  supplier_id: string | null;
+  suggestedQty: number;
+  confidence: number;
+  status: string;
+}
+
+export interface PurchaseOrderListOut {
+  id: string;
+  supplier: string;
+  date: string;
+  amount: string;
+  status: string;
+}
+
+export interface PurchaseOrderCreateRequest {
+  supplier_id: string;
+  expected_delivery?: string | null;
+  items: Array<{
+    product_id: string;
+    quantity: number;
+    unit_price?: number | null;
+  }>;
 }

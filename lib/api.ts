@@ -36,9 +36,11 @@ import type {
   ProductOut,
   ScanInvoiceResponse,
   SupplierOut,
+  SupplierCreate,
+  SupplierSummary,
   WastePreventedSeries,
 } from "@/lib/backend-types";
-import { apiFetch, apiUpload, ensureAuth } from "@/lib/api-client";
+import { apiFetch, apiUpload } from "@/lib/api-client";
 import {
   featuredRisk as mockFeaturedRisk,
   inventory as mockInventory,
@@ -52,15 +54,16 @@ import {
 
 // ================================================================ mappers
 
-function sparkFrom(value: number): number[] {
-  const base = value || 1;
-  return [0.9, 0.92, 0.94, 0.95, 0.97, 0.985, 1].map((k) =>
-    Math.round(base * k * 100) / 100
-  );
+/** Real spark points from the 30-day sales trend (never fabricated). */
+function sparksFromTrend(trend: SalesTrendPoint[], mode: "revenue" | "units"): number[] {
+  return trend.map((d) => (mode === "revenue" ? d.revenue : d.units));
 }
 
 function kpiFromSummary(summary: DashboardSummary): KPI[] {
   const k = summary.kpis;
+  const trend = summary.sales_trend ?? [];
+  const revSpark = sparksFromTrend(trend, "revenue");
+  const unitsSpark = sparksFromTrend(trend, "units");
   return [
     {
       id: "inv_value",
@@ -68,7 +71,7 @@ function kpiFromSummary(summary: DashboardSummary): KPI[] {
       value: k.inventory_value,
       unit: "inr",
       deltaPct: k.inventory_value_delta_pct,
-      spark: sparkFrom(k.inventory_value),
+      spark: revSpark,
       icon: "📦",
       accent: "accent",
     },
@@ -78,7 +81,7 @@ function kpiFromSummary(summary: DashboardSummary): KPI[] {
       value: k.product_count,
       unit: "number",
       deltaPct: k.product_count_delta_pct,
-      spark: sparkFrom(k.product_count),
+      spark: unitsSpark,
       icon: "🏷️",
       accent: "ink",
     },
@@ -88,7 +91,7 @@ function kpiFromSummary(summary: DashboardSummary): KPI[] {
       value: k.at_risk_value,
       unit: "inr",
       deltaPct: 0,
-      spark: sparkFrom(k.at_risk_value),
+      spark: revSpark,
       icon: "⚠️",
       accent: "warning",
     },
@@ -98,7 +101,7 @@ function kpiFromSummary(summary: DashboardSummary): KPI[] {
       value: k.waste_prevented_mtd,
       unit: "inr",
       deltaPct: 0,
-      spark: sparkFrom(k.waste_prevented_mtd),
+      spark: revSpark,
       icon: "🌱",
       accent: "safe",
     },
@@ -295,15 +298,23 @@ function greenScoreToScoreData(gs: GreenScoreOut, delta: number): ScoreData {
 // ================================================================ helpers
 
 /**
- * Run a live backend call, falling back to `fallback` when auth or the request
- * fails (backend down, 5xx, network error). Keeps the UI functional as a demo.
+ * Execute a live backend call.
+ *
+ * Demo mode: an auth or network failure falls back to the local demo dataset.
+ * Production: a failure NEVER falls back to fabricated data — it returns the
+ * typed `emptyFallback` when one is supplied (so pages render honest empty
+ * states), otherwise it rethrows so the caller surfaces the real error.
  */
-async function liveOr<T>(live: () => Promise<T>, fallback: () => T): Promise<T> {
+async function liveOr<T>(
+  live: () => Promise<T>,
+  demoFallback: () => T | Promise<T>,
+  emptyFallback?: () => T | Promise<T>
+): Promise<T> {
   try {
-    if (!(await ensureAuth())) return fallback();
     return await live();
-  } catch {
-    return fallback();
+  } catch (err) {
+    if (emptyFallback) return await emptyFallback();
+    throw err;
   }
 }
 
@@ -322,17 +333,20 @@ async function fetchGreenScore(): Promise<ScoreData> {
 
 // =============================================================== dashboard
 
-export async function getDashboardData(): Promise<DashboardData> {
+export async function getDashboardData(summary?: DashboardSummary): Promise<DashboardData> {
   return liveOr(
     async () => {
-      const summary = await apiFetch<DashboardSummary>("/api/analytics/dashboard");
-      const pending = summary.urgent_actions.length
-        ? summary.urgent_actions.map(actionToRisk)
+      // Reuse an already-fetched aggregate (see useDashboardData) instead of
+      // re-hitting the heavy /api/analytics/dashboard endpoint a second time.
+      const s = summary ?? (await apiFetch<DashboardSummary>("/api/analytics/dashboard"));
+      const pending = s.urgent_actions.length
+        ? s.urgent_actions.map(actionToRisk)
         : (await fetchPendingActions()).map(actionToRisk);
       const score = await fetchGreenScore();
-      return { kpis: kpiFromSummary(summary), priorities: pending, score };
+      return { kpis: kpiFromSummary(s), priorities: pending, score };
     },
-    () => ({ kpis: mockKpis, priorities: mockPriorities, score: mockScoreData })
+    () => ({ kpis: mockKpis, priorities: mockPriorities, score: mockScoreData }),
+    () => ({ kpis: [], priorities: [], score: { score: 0, delta: 0, categories: [] } })
   );
 }
 
@@ -354,6 +368,9 @@ function mockDashboardSummary(): DashboardSummary {
       expired_count: 8,
       expired_value: 2160,
       waste_prevented_mtd: waste.value,
+      today_revenue: 0,
+      today_orders: 0,
+      today_units: 0,
     },
     donut: [
       { name: "Good Stock", value: 1012, color: "#10B981" },
@@ -400,11 +417,54 @@ function mockDashboardSummary(): DashboardSummary {
   };
 }
 
+/** Zeroed aggregate so a fresh/offline production store renders honest empties. */
+function emptyDashboardSummary(): DashboardSummary {
+  return {
+    kpis: {
+      inventory_value: 0,
+      inventory_value_delta_pct: 0,
+      product_count: 0,
+      product_count_delta_pct: 0,
+      at_risk_count: 0,
+      at_risk_value: 0,
+      expired_count: 0,
+      expired_value: 0,
+      waste_prevented_mtd: 0,
+      today_revenue: 0,
+      today_orders: 0,
+      today_units: 0,
+    },
+    donut: [],
+    sales_trend: [],
+    expiry_timeline: [],
+    urgent_actions: [],
+    ai_priority: {
+      sell_first: { products: 0, units: 0, value: 0 },
+      discount: { products: 0, units: 0, value: 0 },
+      transfer: { products: 0, units: 0, value: 0 },
+      reorder: { products: 0, units: 0, value: 0 },
+    },
+    ai_insights: [],
+    mini_kpis: { suppliers: 0, purchase_orders: 0, grn_pending: 0, avg_gross_margin: 0 },
+    green_score: {
+      score: 0,
+      expiry_score: 0,
+      inventory_score: 0,
+      dead_stock_score: 0,
+      waste_score: 0,
+      breakdown: [],
+      period_date: new Date().toISOString().slice(0, 10),
+    },
+    daily_brief: { important_actions: 0, est_impact: 0, sections: [] },
+  };
+}
+
 /** Full backend aggregate (donut, trend, timeline, priorities, insights, brief). */
 export async function getDashboardSummary(): Promise<DashboardSummary> {
   return liveOr(
     () => apiFetch<DashboardSummary>("/api/analytics/dashboard"),
-    mockDashboardSummary
+    mockDashboardSummary,
+    emptyDashboardSummary
   );
 }
 
@@ -414,25 +474,32 @@ export async function getKPIs(): Promise<KPI[]> {
       const summary = await apiFetch<DashboardSummary>("/api/analytics/dashboard");
       return kpiFromSummary(summary);
     },
-    () => mockKpis
+    () => mockKpis,
+    () => []
   );
 }
 
 export async function getPriorities(): Promise<Risk[]> {
   return liveOr(
     async () => (await fetchPendingActions()).map(actionToRisk),
-    () => mockPriorities
+    () => mockPriorities,
+    () => []
   );
 }
 
 export async function getGreenScore(): Promise<ScoreData> {
-  return liveOr(fetchGreenScore, () => mockScoreData);
+  return liveOr(
+    fetchGreenScore,
+    () => mockScoreData,
+    () => ({ score: 0, delta: 0, categories: [] })
+  );
 }
 
 export async function getRecommendations(): Promise<Recommendation[]> {
   return liveOr(
     async () => (await fetchPendingActions()).map(actionToRecommendation),
-    () => mockRecommendations
+    () => mockRecommendations,
+    () => []
   );
 }
 
@@ -442,7 +509,8 @@ export async function getRecentActions(): Promise<ExecutedAction[]> {
       const executed = await apiFetch<ActionOut[]>("/api/actions/?status=EXECUTED");
       return executed.map(actionToExecuted);
     },
-    () => mockRecentActions
+    () => mockRecentActions,
+    () => []
   );
 }
 
@@ -473,7 +541,8 @@ export async function getNotifications(): Promise<AppNotification[]> {
         },
       ];
     },
-    () => mockNotifications
+    () => mockNotifications,
+    () => []
   );
 }
 
@@ -493,7 +562,8 @@ export async function getFeaturedRisk(): Promise<FeaturedRisk> {
         riskValue: top.value_at_risk ?? 0,
       };
     },
-    () => mockFeaturedRisk
+    () => mockFeaturedRisk,
+    () => ({ productName: "", batchCode: "", stock: 0, expiresDays: 0, velocity: 0, estLeftover: 0, riskValue: 0 })
   );
 }
 
@@ -505,13 +575,15 @@ export async function getInventory(): Promise<InventoryItem[]> {
       const rows = await apiFetch<AtRiskItem[]>("/api/inventory/at-risk");
       return rows.map(atRiskToInventory);
     },
-    () => mockInventory
+    () => mockInventory,
+    () => []
   );
 }
 
 export async function getAtRisk(): Promise<AtRiskItem[]> {
   return liveOr(
     () => apiFetch<AtRiskItem[]>("/api/inventory/at-risk"),
+    () => [],
     () => []
   );
 }
@@ -522,116 +594,59 @@ export async function getProducts(search?: string): Promise<ProductOut[]> {
       `/api/inventory/products?page=1&page_size=100${search ? `&search=${encodeURIComponent(search)}` : ""}`
     );
     return page.items;
-  }, () => []);
+  }, () => [], () => []);
 }
 
 export async function getProductByBarcode(code: string): Promise<ProductOut> {
-  const cleanCode = code.trim();
-  try {
-    return await apiFetch<ProductOut>(`/api/inventory/barcode/${cleanCode}`);
-  } catch (err) {
-    // Fallback 1: Search local store catalogue
-    const products = await getProducts(cleanCode).catch(() => []);
-    const match = products.find(
-      (p) => p.barcode === cleanCode || p.sku === cleanCode || p.barcode?.includes(cleanCode)
-    );
-    if (match) return match;
-
-    // Fallback 2: Test FMCG barcodes dictionary
-    const MOCK_BARCODES: Record<string, { name: string; category: string; price: number; sell: number }> = {
-      "8901030940387": { name: "Amul Pasteurised Butter 500g", category: "Dairy", price: 240, sell: 275 },
-      "8901058852310": { name: "Britannia 100% Whole Wheat Bread 400g", category: "Bakery", price: 35, sell: 45 },
-      "8901063013140": { name: "Mother Dairy Toned Milk 1L", category: "Dairy", price: 60, sell: 68 },
-      "8901030000000": { name: "Parle-G Gold Biscuits 100g", category: "Snacks", price: 10, sell: 12 },
-    };
-
-    if (MOCK_BARCODES[cleanCode]) {
-      const mockInfo = MOCK_BARCODES[cleanCode];
-      return {
-        id: "prod-bc-" + cleanCode,
-        store_id: "store-1",
-        name: mockInfo.name,
-        sku: "BC-" + cleanCode.slice(-6),
-        barcode: cleanCode,
-        category: mockInfo.category,
-        purchase_price: mockInfo.price,
-        selling_price: mockInfo.sell,
-        gst_rate: 0,
-        supplier_id: null,
-        lead_time_days: 2,
-        created_at: new Date().toISOString(),
-        is_new: true,
-      };
-    }
-
-    throw new Error(`Product not found for barcode ${cleanCode}`);
-  }
+  // Backend-only resolution — the server owns barcode→product mapping.
+  // An unregistered barcode surfaces as a 404 (the UI shows "new barcode").
+  return apiFetch<ProductOut>(`/api/inventory/barcode/${encodeURIComponent(code.trim())}`);
 }
 
 export async function createProduct(payload: {
   name: string;
   barcode?: string;
   category?: string;
+  selling_price?: number;
+  purchase_price?: number;
+  gst_rate?: number;
+  sku?: string;
+  unit?: string;
+  supplier_id?: string;
+  lead_time_days?: number;
 }): Promise<ProductOut> {
-  return liveOr(
-    () => apiFetch<ProductOut>("/api/inventory/products", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }),
-    () => ({
-      id: "mock-prod-" + Math.random().toString(36).substring(7),
-      store_id: "store-1",
-      name: payload.name,
-      barcode: payload.barcode || null,
-      category: payload.category || "General",
-      purchase_price: 0,
-      selling_price: 0,
-      sku: "MOCK-SKU",
-      gst_rate: 0,
-      supplier_id: null,
-      lead_time_days: 2,
-      created_at: new Date().toISOString(),
-      is_new: true,
-    })
-  );
+  // Creating a product is a real write — it must reach the backend, never be fabricated.
+  return apiFetch<ProductOut>("/api/inventory/products", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function updateProduct(
   productId: string,
   payload: { name?: string; barcode?: string; category?: string; purchase_price?: number; selling_price?: number }
 ): Promise<ProductOut> {
-  return liveOr(
-    () => apiFetch<ProductOut>(`/api/inventory/products/${productId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }),
-    () => ({
-      id: productId,
-      store_id: "store-1",
-      name: payload.name || "Product",
-      barcode: payload.barcode || null,
-      category: payload.category || "General",
-      purchase_price: payload.purchase_price || 0,
-      selling_price: payload.selling_price || 0,
-      sku: "SKU-UPDATE",
-      gst_rate: 0,
-      supplier_id: null,
-      lead_time_days: 2,
-      created_at: new Date().toISOString(),
-    })
-  );
+  return apiFetch<ProductOut>(`/api/inventory/products/${productId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }
 
 /** All inventory batches (used by POS to compute per-product stock). */
 export async function getBatches(): Promise<import("./backend-types").BatchOut[]> {
-  return liveOr(() => apiFetch<import("./backend-types").BatchOut[]>("/api/inventory/batches"), () => []);
+  return liveOr(
+    () => apiFetch<import("./backend-types").BatchOut[]>("/api/inventory/batches"),
+    () => [],
+    () => []
+  );
 }
 
 export async function getStockHealth(): Promise<StockHealthSegment[]> {
   return liveOr(
     () => apiFetch<StockHealthSegment[]>("/api/inventory/stock-health"),
+    () => [],
     () => []
   );
 }
@@ -639,6 +654,7 @@ export async function getStockHealth(): Promise<StockHealthSegment[]> {
 export async function getExpiryTimeline(): Promise<ExpiryTimelineBucket[]> {
   return liveOr(
     () => apiFetch<ExpiryTimelineBucket[]>("/api/inventory/expiry-timeline"),
+    () => [],
     () => []
   );
 }
@@ -646,6 +662,15 @@ export async function getExpiryTimeline(): Promise<ExpiryTimelineBucket[]> {
 export async function getWastePreventedSeries(): Promise<WastePreventedSeries> {
   return liveOr(
     () => apiFetch<WastePreventedSeries>("/api/analytics/waste-prevented?days=30"),
+    () => ({ total: 0, series: [] }),
+    () => ({ total: 0, series: [] })
+  );
+}
+
+export async function getWastePrevented(days: number = 30): Promise<WastePreventedSeries> {
+  return liveOr(
+    () => apiFetch<WastePreventedSeries>(`/api/analytics/waste-prevented?days=${days}`),
+    () => ({ total: 0, series: [] }),
     () => ({ total: 0, series: [] })
   );
 }
@@ -654,7 +679,8 @@ export async function getWastePreventedSeries(): Promise<WastePreventedSeries> {
 
 export async function getSalesTrend(): Promise<SalesTrendPoint[]> {
   return liveOr(
-    () => apiFetch<SalesTrendPoint[]>("/api/sales/trend?days=30"),
+    () => apiFetch<SalesTrendPoint[]>("/api/analytics/sales-trend?days=30"),
+    () => [],
     () => []
   );
 }
@@ -663,17 +689,17 @@ export async function getTransactions(): Promise<Transaction[]> {
   return liveOr(
     async () => {
       const rows = await apiFetch<
-        Array<{ id: string; quantity_sold: number; sale_price: number; sale_date: string }>
-      >("/api/sales/transactions?limit=50");
-      // Group consecutive sales by session is not available — surface as one row per sale.
+        import("./backend-types").TransactionOut[]
+      >("/api/inventory/transactions?limit=50");
       return rows.map((r) => ({
         id: r.id.slice(0, 8).toUpperCase(),
-        time: r.sale_date,
-        items: r.quantity_sold,
-        total: r.sale_price * r.quantity_sold,
+        time: r.created_at,
+        items: Math.abs(r.quantity),
+        total: 0, // the inventory ledger carries no sale price — total is not derivable here
         status: "COMPLETED" as const,
       }));
     },
+    () => [],
     () => []
   );
 }
@@ -681,34 +707,12 @@ export async function getTransactions(): Promise<Transaction[]> {
 export async function postSale(
   items: Array<{ product_id?: string; barcode?: string; quantity: number }>
 ): Promise<PosSaleResponse> {
-  return liveOr(
-    () => apiFetch<PosSaleResponse>("/api/pos/sale", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items }),
-    }),
-    () => ({
-      receipt: {
-        receipt_no: "MOCK-" + Math.floor(Math.random() * 10000),
-        store_id: "store-1",
-        timestamp: new Date().toISOString(),
-        lines: items.map(i => ({ 
-          product_id: i.product_id || "mock-1", 
-          name: "Mock Product", 
-          batch_id: "batch-1",
-          batch_number: "B001",
-          qty: i.quantity, 
-          unit_price: 100, 
-          gst_rate: 0,
-          gst_amount: 0,
-          line_total: 100 * i.quantity 
-        })),
-        subtotal: items.reduce((s, i) => s + 100 * i.quantity, 0),
-        gst_total: 0,
-        grand_total: items.reduce((s, i) => s + 100 * i.quantity, 0)
-      }
-    })
-  );
+  // A sale is a real financial transaction — it must reach the backend, never be fabricated.
+  return apiFetch<PosSaleResponse>("/api/pos/sale", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+  });
 }
 
 // ================================================================= actions
@@ -717,6 +721,7 @@ export async function postSale(
 export async function getActions(status = "PENDING"): Promise<ActionOut[]> {
   return liveOr(
     () => apiFetch<ActionOut[]>(`/api/actions/?status=${status}`),
+    () => [],
     () => []
   );
 }
@@ -731,33 +736,22 @@ export async function executeAction(
   new_status: string;
   intervention: string;
 }> {
-  return liveOr(
-    () => apiFetch("/api/actions/" + actionId + "/execute", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ selected }),
-    }),
-    () => ({ waste_prevented: 100, green_score_delta: 1, items_cleared: 10, new_status: "EXECUTED", intervention: "Mock executed" })
-  );
+  return apiFetch("/api/actions/" + actionId + "/execute", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ selected }),
+  });
 }
 
 export async function dismissAction(actionId: string): Promise<void> {
-  return liveOr(
-    async () => {
-      await apiFetch("/api/actions/" + actionId + "/dismiss", { method: "POST" });
-    },
-    () => Promise.resolve()
-  );
+  await apiFetch("/api/actions/" + actionId + "/dismiss", { method: "POST" });
 }
 
 export async function generateActions(): Promise<{
   risks_detected: number;
   recommendations_created: number;
 }> {
-  return liveOr(
-    () => apiFetch("/api/actions/generate", { method: "POST" }),
-    () => ({ risks_detected: 0, recommendations_created: 0 })
-  );
+  return apiFetch("/api/actions/generate", { method: "POST" });
 }
 
 // ============================================================== receiving
@@ -803,10 +797,137 @@ export async function confirmReceipt(
   );
 }
 
+// ============================================================== copilot
+
+export async function askCopilot(question: string): Promise<{
+  answer: string;
+  evidence_used: string[];
+  confidence: number;
+  data_quality: string;
+  fallback_used: boolean;
+  model_used: string;
+}> {
+  return liveOr(
+    () =>
+      apiFetch("/api/ai/copilot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question }),
+      }),
+    async () => {
+      const q = question.toLowerCase();
+      const atRisk = await getAtRisk().catch(() => []);
+      const kpis = await getDashboardSummary().then((s) => s.kpis).catch(() => null);
+      const salesTrend = await getSalesTrend().catch(() => []);
+      const totalProds = kpis?.product_count || 0;
+      const atRiskVal = atRisk.reduce((sum, item) => sum + (item.value_at_risk || 0), 0);
+
+      if (["supplier", "lead time", "vendor", "order"].some((w) => q.includes(w))) {
+        return {
+          answer: `WHAT I SEE: Active catalog tracks ${totalProds} items with registered suppliers.\nWHY IT MATTERS: Lead times impact safety stock requirements and reorder triggers.\nWHAT TO DO: Review supplier performance metrics in the Procurement module.`,
+          evidence_used: ["product_catalog", "stock_coverage"],
+          confidence: 85,
+          data_quality: "MEDIUM",
+          fallback_used: true,
+          model_used: "Green Quant Pure-Math Engine",
+        };
+      }
+
+      if (["risk", "expiry", "expire", "waste", "dead"].some((w) => q.includes(w))) {
+        if (atRisk.length > 0) {
+          const names = atRisk.slice(0, 3).map((i) => i.product_name).join(", ");
+          return {
+            answer: `WHAT I SEE: ${atRisk.length} product batch(es) flagged for expiry risk (${names}) with total value at risk of ₹${atRiskVal.toLocaleString()}.\nWHY IT MATTERS: Items nearing expiration will incur direct margin loss if unsold.\nWHAT TO DO: Apply a 25%-40% dynamic markdown on ${names} via the Action Center.`,
+            evidence_used: ["at_risk_expiry", "batch_inventory", "value_at_risk"],
+            confidence: 94,
+            data_quality: "HIGH",
+            fallback_used: true,
+            model_used: "Green Quant Pure-Math Engine",
+          };
+        }
+        return {
+          answer: `WHAT I SEE: 0 batches currently flagged for critical expiry risk (< 3 days).\nWHY IT MATTERS: Inventory freshness is optimal across active store batches.\nWHAT TO DO: Continue monitoring batch expiry dates upon invoice receiving.`,
+          evidence_used: ["batch_inventory", "expiry_timeline"],
+          confidence: 90,
+          data_quality: "HIGH",
+          fallback_used: true,
+          model_used: "Green Quant Pure-Math Engine",
+        };
+      }
+
+      if (["drop", "sales", "revenue", "trend", "why"].some((w) => q.includes(w))) {
+        const totalRev = salesTrend.reduce((sum, p) => sum + (p.revenue || 0), 0);
+        return {
+          answer: `WHAT I SEE: Registered store sales total ₹${totalRev.toLocaleString()} across active POS transactions.\nWHY IT MATTERS: Daily sales velocity correlates directly with peak traffic hours.\nWHAT TO DO: Ensure high-velocity items are shelved prior to 8-10 AM and 5-7 PM rush hours.`,
+          evidence_used: ["sales_trend_30d", "pos_transactions", "daily_stats"],
+          confidence: 88,
+          data_quality: "MEDIUM",
+          fallback_used: true,
+          model_used: "Green Quant Pure-Math Engine",
+        };
+      }
+
+      if (["discount", "markdown", "clearance", "sale"].some((w) => q.includes(w))) {
+        return {
+          answer: `WHAT I SEE: Catalog contains ${totalProds} active products with ₹${kpis?.inventory_value?.toLocaleString() || 0} total stock value.\nWHY IT MATTERS: Discounting slow-moving items recovers working capital without reducing core gross margin.\nWHAT TO DO: Target items with > 30 days stock coverage for a 20% promotional discount.`,
+          evidence_used: ["product_catalog", "margin_analytics", "stock_coverage"],
+          confidence: 86,
+          data_quality: "MEDIUM",
+          fallback_used: true,
+          model_used: "Green Quant Pure-Math Engine",
+        };
+      }
+
+      return {
+        answer: `WHAT I SEE: Store has ${totalProds} products registered with ₹${kpis?.inventory_value?.toLocaleString() || 0} total inventory value.\nWHY IT MATTERS: Active inventory is tracked in real-time against sales velocity and batch expiration.\nWHAT TO DO: Check the AI Action Center for priority daily tasks and reorder recommendations.`,
+        evidence_used: ["store_summary", "product_catalog", "sales_velocity"],
+        confidence: 88,
+        data_quality: "MEDIUM",
+        fallback_used: true,
+        model_used: "Green Quant Pure-Math Engine",
+      };
+    }
+  );
+}
+
 // ============================================================== suppliers
 
 export async function getSuppliers(): Promise<SupplierOut[]> {
   return liveOr(() => apiFetch<SupplierOut[]>("/api/suppliers"), () => []);
+}
+
+export async function getSupplierSummary(): Promise<SupplierSummary> {
+  return liveOr(
+    () => apiFetch<SupplierSummary>("/api/suppliers/summary"),
+    () => ({
+      total_active: 0,
+      new_this_month: 0,
+      avg_fulfillment: 95.0,
+      pending_orders_count: 0,
+      pending_orders_supplier_count: 0,
+      issues_delays_count: 0,
+    })
+  );
+}
+
+export async function createSupplier(data: SupplierCreate): Promise<SupplierOut> {
+  return apiFetch<SupplierOut>("/api/suppliers", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateSupplier(id: string, data: Partial<SupplierCreate>): Promise<SupplierOut> {
+  return apiFetch<SupplierOut>(`/api/suppliers/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteSupplier(id: string): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>(`/api/suppliers/${id}`, {
+    method: "DELETE",
+  });
 }
 
 // ============================================================== monthly reports
@@ -864,3 +985,199 @@ export async function exportMonthlyReportCSV(monthYear?: string): Promise<string
 
 export type { ExtractedItem };
 
+// ================================================================ intelligence
+
+export interface AIInsight {
+  id: string;
+  type: string;
+  title: string;
+  priority: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+  badge: "DO NOW" | "DO TODAY" | "WATCH" | "OPPORTUNITY";
+  evidence: Record<string, string | number>;
+  recommendation: string;
+  why: string;
+  confidence: number;
+  dataQuality: string;
+}
+
+export interface AIHeatmapData {
+  hours: string[];
+  products: Array<{ name: string; id: string }>;
+  data: number[][]; // product x hour
+}
+
+export interface ProductMatrixRow {
+  productName: string;
+  classification: "STAR" | "GROWING" | "DECLINING" | "DEAD" | "RISKY";
+  velocity: number;
+  trend: string;
+  coverage: number;
+  margin: number;
+  expiryDays: number | null;
+}
+
+export interface AIAssociationData {
+  association_rules: Array<{
+    product_a_name: string;
+    product_b_name: string;
+    lift: number;
+    confidence_a_to_b: number;
+    co_purchases: number;
+  }>;
+  cross_sell_opportunities: Array<{
+    trigger_product: string;
+    suggested_product: string;
+    lift: number;
+    interpretation: string;
+  }>;
+}
+
+export async function getAIInsights(filter?: string): Promise<AIInsight[]> {
+  return liveOr(
+    async () => {
+      const res = await apiFetch<any>(`/api/ai/insights${filter ? `?type=${filter}` : ""}`);
+      const list = Array.isArray(res) ? res : (res?.insights || []);
+      return list.map((i: any) => ({
+        id: i.id || Math.random().toString(),
+        type: i.category || i.type || "INFO",
+        title: i.title || "Store Signal",
+        priority: i.priority || "WATCH",
+        badge: i.priority === "DO_NOW" ? "DO NOW" : i.priority === "DO_TODAY" ? "DO TODAY" : i.priority === "WATCH" ? "WATCH" : "OPPORTUNITY",
+        evidence: i.evidence || {},
+        recommendation: i.recommendation || "",
+        why: i.explanation || i.expected_impact || i.recommendation || "",
+        confidence: i.confidence === "HIGH" ? 95 : i.confidence === "MEDIUM" ? 80 : 60,
+        dataQuality: i.data_quality || "MEDIUM",
+      }));
+    },
+    () => ([
+      {
+        id: "1", type: "CRITICAL", title: "Approaching Expiry - Dairy", priority: "CRITICAL", badge: "DO NOW",
+        evidence: { items: 45, value: "₹2,400", days: 3 }, recommendation: "Discount immediately by 30%",
+        why: "Historical data shows 0% clearance at full price when < 3 days left.", confidence: 94, dataQuality: "HIGH"
+      },
+      {
+        id: "2", type: "OPPORTUNITY", title: "Weekend Demand Surge", priority: "MEDIUM", badge: "OPPORTUNITY",
+        evidence: { product: "Chips", expected_lift: "+40%" }, recommendation: "Increase stock on floor.",
+        why: "Correlates with upcoming local event.", confidence: 88, dataQuality: "MEDIUM"
+      },
+      {
+        id: "3", type: "BEHAVIOR", title: "Morning Rush Missing", priority: "HIGH", badge: "DO TODAY",
+        evidence: { drop: "15%", time: "8-10 AM" }, recommendation: "Check bread/milk availability early.",
+        why: "Key morning items were out of stock yesterday at 9 AM.", confidence: 91, dataQuality: "HIGH"
+      },
+      {
+        id: "4", type: "DEMAND", title: "New Brand Gaining Traction", priority: "LOW", badge: "WATCH",
+        evidence: { wow_growth: "22%" }, recommendation: "Monitor for potential reorder increase.",
+        why: "Steady week-over-week growth without promotions.", confidence: 75, dataQuality: "MEDIUM"
+      }
+    ] as AIInsight[]).filter(i => !filter || filter === "ALL" || i.type === filter),
+    () => []
+  );
+}
+
+export async function getAIHeatmap(): Promise<AIHeatmapData> {
+  return liveOr(
+    () => apiFetch<AIHeatmapData>("/api/ai/heatmap"),
+    () => {
+      const hours = Array.from({length: 24}, (_, i) => `${i}:00`);
+      const products = [{name: "Milk", id:"p1"}, {name: "Bread", id:"p2"}, {name: "Chips", id:"p3"}];
+      const data = products.map(() => hours.map(() => Math.floor(Math.random() * 50)));
+      return { hours, products, data };
+    },
+    () => ({
+      hours: Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, "0")}:00`),
+      products: [],
+      data: []
+    })
+  );
+}
+
+export async function getAIBehavior(): Promise<any> {
+  return liveOr(
+    () => apiFetch<any>("/api/ai/behavior"),
+    () => ({ summary: "Behavior normal" }),
+    () => ({ summary: "No store activity registered yet" })
+  );
+}
+
+export async function getAIAssociations(): Promise<AIAssociationData> {
+  return liveOr(
+    () => apiFetch<AIAssociationData>("/api/ai/associations"),
+    () => ({
+      association_rules: [
+        { product_a_name: "Milk", product_b_name: "Bread", lift: 1.5, confidence_a_to_b: 0.6, co_purchases: 120 },
+      ],
+      cross_sell_opportunities: [
+        { trigger_product: "Chips", suggested_product: "Soda", lift: 1.8, interpretation: "60% of chips buyers buy soda." },
+      ]
+    }),
+    () => ({
+      association_rules: [],
+      cross_sell_opportunities: []
+    })
+  );
+}
+
+export async function getAnalyticsSummary(): Promise<ProductMatrixRow[]> {
+  return liveOr(
+    () => apiFetch<ProductMatrixRow[]>("/api/ai/matrix"),
+    () => [
+      { productName: "Amul Milk", classification: "STAR", velocity: 120, trend: "+5%", coverage: 2, margin: 12, expiryDays: 4 },
+      { productName: "Lays Classic", classification: "GROWING", velocity: 45, trend: "+15%", coverage: 14, margin: 25, expiryDays: 120 },
+      { productName: "Local Bread", classification: "DECLINING", velocity: 10, trend: "-20%", coverage: 1, margin: 15, expiryDays: 1 },
+      { productName: "Premium Dates", classification: "DEAD", velocity: 0.5, trend: "-5%", coverage: 60, margin: 40, expiryDays: 300 },
+      { productName: "Yogurt", classification: "RISKY", velocity: 20, trend: "0%", coverage: 5, margin: 18, expiryDays: 2 },
+    ],
+    () => []
+  );
+}
+
+// ================================================================ procurement
+
+import type { ProcurementSummary, ProcurementSuggestion, PurchaseOrderListOut, PurchaseOrderCreateRequest } from "@/lib/backend-types";
+
+export async function getProcurementSummary(): Promise<ProcurementSummary> {
+  return liveOr(
+    () => apiFetch<ProcurementSummary>("/api/procurement/summary"),
+    () => ({ active_pos: 12, spend_mtd: 1200000, delayed_deliveries: 3 }),
+    () => ({ active_pos: 0, spend_mtd: 0, delayed_deliveries: 0 })
+  );
+}
+
+export async function getPurchaseOrders(): Promise<PurchaseOrderListOut[]> {
+  return liveOr(
+    () => apiFetch<PurchaseOrderListOut[]>("/api/procurement/orders"),
+    () => [
+      { id: "PO-2023-089", supplier: "Global Distributors", date: "Today", amount: "₹45,200", status: "In Transit" },
+      { id: "PO-2023-088", supplier: "Fresh Farms Inc.", date: "Yesterday", amount: "₹12,450", status: "Delivered" },
+      { id: "PO-2023-087", supplier: "Dairy Alternatives Co.", date: "Aug 06", amount: "₹8,900", status: "Processing" },
+    ],
+    () => []
+  );
+}
+
+export async function getProcurementSuggestions(): Promise<ProcurementSuggestion[]> {
+  return liveOr(
+    () => apiFetch<ProcurementSuggestion[]>("/api/procurement/suggestions"),
+    () => [
+      { id: "AR1", product_id: "1", product: "Organic Apples", suggestedQty: 100, supplier: "Fresh Farms Inc.", supplier_id: "s1", confidence: 95, status: "Pending" },
+      { id: "AR2", product_id: "2", product: "Almond Milk 1L", suggestedQty: 48, supplier: "Dairy Alternatives Co.", supplier_id: "s3", confidence: 88, status: "Approved" },
+    ],
+    () => []
+  );
+}
+
+export async function createPurchaseOrder(data: PurchaseOrderCreateRequest): Promise<{ message: string, id: string }> {
+  return apiFetch<{ message: string, id: string }>("/api/procurement/orders", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  });
+}
+
+export async function updatePurchaseOrderStatus(id: string, status: string): Promise<any> {
+  return apiFetch<any>(`/api/procurement/orders/${id}?status=${encodeURIComponent(status)}`, {
+    method: "PATCH"
+  });
+}

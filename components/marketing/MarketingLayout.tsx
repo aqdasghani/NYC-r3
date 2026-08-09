@@ -1,6 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
-import { Activity, ArrowRight } from 'lucide-react';
+import { Activity, ArrowRight, AlertTriangle } from 'lucide-react';
 
 export function MarketingLayout({
   children,
@@ -10,7 +10,11 @@ export function MarketingLayout({
   return (
     <div className="min-h-screen bg-background selection:bg-brand-green/30 selection:text-brand-green-light flex flex-col">
       {/* Shared Navbar */}
-      <nav className="fixed top-0 left-0 right-0 z-50 px-6 py-4 border-b border-slate-200/50 bg-background/50 backdrop-blur-xl">
+      <div className="bg-slate-900 text-white text-xs font-medium text-center py-1.5 px-4 z-[60] relative flex items-center justify-center gap-2">
+        <AlertTriangle className="w-3.5 h-3.5 text-yellow-500" />
+        <span>Metrics and statistics shown on marketing pages are illustrative examples. Log in to the demo dashboard to see actual product functionality.</span>
+      </div>
+      <nav className="sticky top-0 left-0 right-0 z-50 px-6 py-4 border-b border-slate-200/50 bg-background/50 backdrop-blur-xl">
         <div className="container mx-auto max-w-7xl flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
             <div className="w-8 h-8 rounded bg-brand-green flex items-center justify-center">

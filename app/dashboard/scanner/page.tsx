@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Camera, ScanLine, CheckCircle2, AlertTriangle, Upload, RotateCcw, FileText, QrCode, Search, PackagePlus } from "lucide-react";
 import { confirmReceipt, scanInvoice, getProductByBarcode, getProducts, createProduct } from "@/lib/api";
 import { BarcodeScanner } from "@/components/scanner/BarcodeScanner";
+import { MobileReceiveModal } from "@/components/worker/MobileReceiveModal";
 import type { ExtractedItem, ScanInvoiceResponse, ProductOut } from "@/lib/backend-types";
 import { formatINR } from "@/lib/utils";
 
@@ -13,6 +14,7 @@ type Tab = "invoice" | "barcode" | "manual";
 
 export default function ScannerPage() {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [mobileReceiveOpen, setMobileReceiveOpen] = useState(false);
   
   // Invoice OCR State
   const [stage, setStage] = useState<Stage>("idle");
@@ -33,9 +35,12 @@ export default function ScannerPage() {
   const [newProductName, setNewProductName] = useState("");
   const [manualProducts, setManualProducts] = useState<ProductOut[]>([]);
   
-  // Manual Entry Form State
+  // Manual Entry / Packaging Conversion State
   const [selectedProductId, setSelectedProductId] = useState<string>("");
   const [manualQty, setManualQty] = useState<number>(1);
+  const [packagingMode, setPackagingMode] = useState<"unit" | "box">("box");
+  const [boxCount, setBoxCount] = useState<number>(2);
+  const [unitsPerBox, setUnitsPerBox] = useState<number>(24);
   const [manualPrice, setManualPrice] = useState<number>(0);
   const [manualExpiry, setManualExpiry] = useState<string>("");
   const [manualBatch, setManualBatch] = useState<string>("");
@@ -113,7 +118,6 @@ export default function ScannerPage() {
     try {
       const prod = await getProductByBarcode(code);
       setScannedProduct(prod);
-      // Pre-fill manual form with product defaults
       setSelectedProductId(prod.id);
       setManualPrice(prod.purchase_price || 0);
     } catch (err) {
@@ -130,7 +134,6 @@ export default function ScannerPage() {
     setError(null);
     try {
       const prod = await createProduct({ name: newProductName, barcode: unknownBarcode });
-      // Now act as if we scanned it successfully
       setScannedProduct(prod);
       setSelectedProductId(prod.id);
       setManualPrice(0);
@@ -143,31 +146,35 @@ export default function ScannerPage() {
     }
   };
 
+  const computedTotalUnits = packagingMode === "box" ? (boxCount * unitsPerBox) : manualQty;
+
   const handleManualReceive = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedProductId) return;
+    const targetProductId = selectedProductId || scannedProduct?.id;
+    if (!targetProductId) return;
     
     setConfirming(true);
     setError(null);
     try {
       const payload = [{
-        product_id: selectedProductId,
-        quantity: manualQty,
+        product_id: targetProductId,
+        quantity: computedTotalUnits, // Total calculated base units (e.g. 2 boxes * 24 = 48 packets)
         purchase_price: manualPrice || undefined,
         expiry_date: manualExpiry || new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
         batch_number: manualBatch || undefined,
       }];
       
       const res = await confirmReceipt(payload);
-      setSummary(`Added batch successfully. AI Queued ${res.detection_summary.recommendations_created} actions.`);
+      setSummary(`Stock received: +${computedTotalUnits} ${'packets'} added to database. (AI Queued ${res.detection_summary.recommendations_created} actions)`);
       
-      // reset form
       if (activeTab === "manual") {
         setSelectedProductId("");
       } else {
         setScannedProduct(null);
       }
       setManualQty(1);
+      setBoxCount(2);
+      setUnitsPerBox(24);
       setManualPrice(0);
       setManualExpiry("");
       setManualBatch("");
@@ -203,14 +210,22 @@ export default function ScannerPage() {
             Process invoices, scan barcodes, or enter stock manually.
           </p>
         </div>
-        {(stage !== "idle" || scannedProduct) && (
+        <div className="flex items-center gap-3">
           <button
-            onClick={reset}
-            className="flex items-center gap-2 glass-panel px-4 py-2 rounded-lg text-sm font-medium hover:bg-bg-surface/80 transition-colors"
+            onClick={() => setMobileReceiveOpen(true)}
+            className="flex items-center gap-2 bg-brand-green text-black px-4 py-2 rounded-xl text-xs font-bold hover:bg-brand-green/90 transition-colors shadow-sm"
           >
-            <RotateCcw className="w-4 h-4" /> Start Over
+            <PackagePlus className="w-4 h-4" /> Worker Mobile Receive
           </button>
-        )}
+          {(stage !== "idle" || scannedProduct) && (
+            <button
+              onClick={reset}
+              className="flex items-center gap-2 glass-panel px-4 py-2 rounded-lg text-sm font-medium hover:bg-bg-surface/80 transition-colors"
+            >
+              <RotateCcw className="w-4 h-4" /> Start Over
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -395,41 +410,159 @@ export default function ScannerPage() {
           </div>
           <div className="space-y-4">
             {scannedProduct ? (
-              <form onSubmit={handleManualReceive} className="glass-panel p-6 space-y-4">
-                <div className="flex items-start justify-between mb-2">
-                  <h3 className="text-xl font-bold text-text-primary">Receive Stock</h3>
+              <form onSubmit={handleManualReceive} className="glass-panel p-6 space-y-4 bg-white border border-slate-200 rounded-2xl shadow-xs text-xs">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">Add Inventory Stock</h3>
+                    <p className="text-[11px] text-slate-500">Scan stock arrival and set batch expiry date.</p>
+                  </div>
                   {scannedProduct.is_new && (
-                    <span className="bg-brand-green/20 text-brand-green px-2 py-1 rounded text-xs font-bold uppercase tracking-wider">
-                      New Product Discovered
+                    <span className="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full text-[10px] font-bold">
+                      New Product
                     </span>
                   )}
                 </div>
-                <div className="p-4 bg-brand-green/5 border border-brand-green/20 rounded-lg text-sm mb-4">
-                  <p className="font-semibold text-brand-green">{scannedProduct.name}</p>
-                  <p className="text-text-secondary">Code: {scannedProduct.barcode}</p>
+
+                {/* Phase 8 Product Master Card */}
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-bold text-sm text-slate-900">{scannedProduct.name}</p>
+                      <p className="text-slate-500 font-mono text-[11px]">Barcode: {scannedProduct.barcode || "N/A"}</p>
+                    </div>
+                    <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 font-bold rounded text-[10px] uppercase">
+                      {scannedProduct.category || "General"}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200/80 text-[11px]">
+                    <div>
+                      <span className="text-slate-400 block text-[10px]">MRP</span>
+                      <strong className="text-slate-700 font-mono">₹{scannedProduct.selling_price ?? 0}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px]">Selling Price</span>
+                      <strong className="text-emerald-600 font-mono">₹{scannedProduct.selling_price ?? 0}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px]">Base Unit</span>
+                      <strong className="text-slate-700 font-bold capitalize">{"packets"}</strong>
+                    </div>
+                  </div>
                 </div>
-                
-                <div className="grid grid-cols-2 gap-4">
+
+                {/* Packaging & Unit Conversion Calculator */}
+                <div className="space-y-3 p-3.5 bg-emerald-50/50 border border-emerald-200/60 rounded-xl">
+                  <div className="flex justify-between items-center">
+                    <label className="font-bold text-slate-800">Packaging Type</label>
+                    <div className="flex gap-1 bg-white p-1 rounded-lg border border-slate-200">
+                      <button
+                        type="button"
+                        onClick={() => setPackagingMode("box")}
+                        className={`px-3 py-1 rounded text-[11px] font-bold transition-all ${
+                          packagingMode === "box" ? "bg-emerald-600 text-white shadow-2xs" : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        Boxes / Cases
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPackagingMode("unit")}
+                        className={`px-3 py-1 rounded text-[11px] font-bold transition-all ${
+                          packagingMode === "unit" ? "bg-emerald-600 text-white shadow-2xs" : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        Loose Packets
+                      </button>
+                    </div>
+                  </div>
+
+                  {packagingMode === "box" ? (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">Number of Boxes</label>
+                          <input 
+                            type="number" 
+                            min={1} 
+                            value={boxCount} 
+                            onChange={(e) => setBoxCount(Math.max(1, Number(e.target.value)))} 
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-mono text-xs focus:outline-none focus:border-emerald-600" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">Units per Box</label>
+                          <input 
+                            type="number" 
+                            min={1} 
+                            value={unitsPerBox} 
+                            onChange={(e) => setUnitsPerBox(Math.max(1, Number(e.target.value)))} 
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-mono text-xs focus:outline-none focus:border-emerald-600" 
+                          />
+                        </div>
+                      </div>
+
+                      <div className="p-2.5 bg-white border border-emerald-300/80 rounded-lg flex items-center justify-between text-xs font-bold text-slate-900">
+                        <span className="text-slate-600">Unit Conversion Formula:</span>
+                        <span className="text-emerald-700 font-mono">
+                          {boxCount} boxes × {unitsPerBox} packets = <strong className="text-slate-900 text-sm">{boxCount * unitsPerBox}</strong> {'packets'}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Total Loose Quantity ({'packets'})</label>
+                      <input 
+                        type="number" 
+                        min={1} 
+                        value={manualQty} 
+                        onChange={(e) => setManualQty(Math.max(1, Number(e.target.value)))} 
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-mono text-xs focus:outline-none focus:border-emerald-600" 
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Quantity</label>
-                    <input type="number" autoFocus value={manualQty} onChange={(e) => setManualQty(Number(e.target.value))} required min={1} className="w-full px-3 py-2 border rounded-md" />
+                    <label className="block font-bold text-slate-700 mb-1">Unit Purchase Price (₹)</label>
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      value={manualPrice} 
+                      onChange={(e) => setManualPrice(Number(e.target.value))} 
+                      required 
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-mono focus:outline-none focus:border-emerald-600" 
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Purchase Price</label>
-                    <input type="number" step="0.01" value={manualPrice} onChange={(e) => setManualPrice(Number(e.target.value))} required className="w-full px-3 py-2 border rounded-md" />
+                    <label className="block font-bold text-slate-700 mb-1">Expiry Date *</label>
+                    <input 
+                      type="date" 
+                      value={manualExpiry} 
+                      onChange={(e) => setManualExpiry(e.target.value)} 
+                      required 
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-mono focus:outline-none focus:border-emerald-600" 
+                    />
                   </div>
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium mb-1">Batch Number (Optional)</label>
-                  <input type="text" value={manualBatch} onChange={(e) => setManualBatch(e.target.value)} className="w-full px-3 py-2 border rounded-md" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Expiry Date (YYYY-MM-DD)</label>
-                  <input type="date" value={manualExpiry} onChange={(e) => setManualExpiry(e.target.value)} required className="w-full px-3 py-2 border rounded-md" />
+                  <label className="block font-bold text-slate-700 mb-1">Batch Number (Optional)</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. B-AMUL-500" 
+                    value={manualBatch} 
+                    onChange={(e) => setManualBatch(e.target.value)} 
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-mono focus:outline-none focus:border-emerald-600" 
+                  />
                 </div>
                 
-                <button type="submit" disabled={confirming} className="w-full bg-brand-green text-black px-4 py-2 rounded-lg font-bold">
-                  {confirming ? "Saving..." : "Add to Inventory"}
+                <button 
+                  type="submit" 
+                  disabled={confirming} 
+                  className="w-full bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-bold hover:bg-emerald-700 transition-colors shadow-xs disabled:opacity-50 text-xs"
+                >
+                  {confirming ? "Saving Stock..." : `Save +${computedTotalUnits} ${'packets'} to Inventory`}
                 </button>
               </form>
             ) : unknownBarcode ? (
@@ -533,6 +666,11 @@ export default function ScannerPage() {
         </div>
       )}
 
+      <MobileReceiveModal
+        isOpen={mobileReceiveOpen}
+        onClose={() => setMobileReceiveOpen(false)}
+        onSuccess={(msg) => setSummary(msg)}
+      />
     </div>
   );
 }

@@ -1,7 +1,9 @@
-import React from 'react';
-import { Sidebar } from '@/components/dashboard/Sidebar';
-import { TopHeader } from '@/components/dashboard/TopHeader';
-import { SidebarProvider } from '@/components/dashboard/SidebarContext';
+import React from "react";
+import { Sidebar } from "@/components/dashboard/Sidebar";
+import { TopHeader } from "@/components/dashboard/TopHeader";
+import { SidebarProvider } from "@/components/dashboard/SidebarContext";
+import { AiChatbotModal } from "@/components/ai/AiChatbotModal";
+import { Toaster } from "@/components/ui/Toaster";
 
 export default function DashboardLayout({
   children,
@@ -10,17 +12,17 @@ export default function DashboardLayout({
 }) {
   return (
     <SidebarProvider>
-      <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden font-sans">
+      <div className="flex h-screen overflow-hidden bg-canvas font-sans text-ink">
         <Sidebar />
-        <div className="flex-1 flex flex-col h-screen overflow-hidden min-w-0">
+        <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
           <TopHeader />
-          <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-[#F4F7F6]">
-            <div className="max-w-[1400px] mx-auto">
-              {children}
-            </div>
+          <main className="flex-1 overflow-y-auto p-4 md:p-6">
+            <div className="mx-auto max-w-[1400px]">{children}</div>
           </main>
         </div>
       </div>
+      <AiChatbotModal />
+      <Toaster />
     </SidebarProvider>
   );
 }

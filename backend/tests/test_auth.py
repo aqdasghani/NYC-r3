@@ -78,11 +78,21 @@ def test_me_rejects_missing_token(client):
     assert client.get("/api/auth/me").status_code == 401
 
 
-def test_register_creates_user_and_token(client):
+def test_register_provisions_store_and_owner(client):
     email = f"new-{uuid.uuid4().hex[:8]}@greenshop.ai"
     r = client.post("/api/auth/register", json={
-        "name": "New User", "email": email, "password": "pass1234", "role": "MANAGER"})
+        "name": "New User", "email": email, "password": "pass1234",
+        "store_name": "New Bazaar"})
     assert r.status_code == 200
-    assert r.json()["access_token"]
-    assert r.json()["user"]["email"] == email
-    assert r.json()["user"]["role"] == "MANAGER"
+    body = r.json()
+    assert body["access_token"]
+    assert body["user"]["email"] == email
+    # A fresh account owns its own store so the dashboard and AI have scope.
+    assert body["user"]["role"] == "OWNER"
+    assert body["user"]["store_id"]
+
+
+def test_register_rejects_duplicate_email(client):
+    r = client.post("/api/auth/register", json={
+        "name": "Dup", "email": "rahul@greenshop.ai", "password": "pass1234"})
+    assert r.status_code == 409

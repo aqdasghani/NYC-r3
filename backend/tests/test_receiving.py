@@ -52,6 +52,20 @@ def test_confirm_rejects_unknown_product(client, owner_headers):
     assert r.status_code == 404
 
 
-def test_scan_requires_owner_manager(client, staff_headers):
+def test_scan_allows_worker_staff(client, staff_headers):
+    # Receiving is a WORKER/STAFF action (B4); the dashboard remains owner-only.
     r = _scan(client, staff_headers)
-    assert r.status_code == 403
+    assert r.status_code == 200
+
+
+def test_scan_denied_for_biller(client, owner_headers):
+    # A BILLER may sell at the POS but must not touch receiving.
+    import uuid
+    email = f"biller-{uuid.uuid4().hex[:6]}@greenshop.ai"
+    r = client.post("/api/auth/users", headers=owner_headers, json={
+        "name": "Biller Tester", "email": email, "password": "demo1234", "role": "BILLER",
+    })
+    assert r.status_code == 200, r.text
+    login = client.post("/api/auth/login", json={"email": email, "password": "demo1234"})
+    biller_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    assert _scan(client, biller_headers).status_code == 403

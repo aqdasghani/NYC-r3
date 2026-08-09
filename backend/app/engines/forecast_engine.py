@@ -3,32 +3,35 @@ from __future__ import annotations
 
 import math
 from datetime import date, datetime, timedelta, timezone
+from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from ..cache import get_cache
 from ..models.database import InventoryBatch, Product, Sale
 
 
-def calculate_velocity(db: Session, store_id, product_id, days: int = 14) -> float:
-    key = f"product:{product_id}:velocity"
-    cached = get_cache().get(key)
-    if cached is not None:
-        return float(cached)
-    since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
-    total = db.scalar(
-        select(Sale.quantity_sold).where(
-            Sale.store_id == store_id, Sale.product_id == product_id, Sale.sale_date >= since
+def calculate_velocity(db: Session, store_id: Any, product_id: Any, days: int = 14) -> float:
+    """
+    Computes daily sales velocity over the past N days.
+    """
+    since = date.today() - timedelta(days=days)
+    
+    # Fast path if using a single query
+    if hasattr(Sale, "quantity_sold"):
+        total_qty = db.scalar(
+            select(func.coalesce(func.sum(Sale.quantity_sold), 0)).where(
+                Sale.store_id == store_id, Sale.product_id == product_id, Sale.sale_date >= since
+            )
         )
-    )
-    # scalar() returns first row; sum in Python for compatibility with SQLite decimals.
+        return float(total_qty or 0) / max(1, days)
+        
     rows = db.scalars(select(Sale.quantity_sold).where(
         Sale.store_id == store_id, Sale.product_id == product_id, Sale.sale_date >= since
     )).all()
-    velocity = float(sum(rows) / days) if rows else 0.0
-    get_cache().set(key, velocity, ttl=1800)
-    return velocity
+    total = sum(rows)
+    return float(total) / max(1, days)
 
 
 def days_of_supply(quantity: int | float, velocity: float) -> float:

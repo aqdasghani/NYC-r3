@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import random
 import uuid
+from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
@@ -31,7 +32,7 @@ from .config import settings
 from .engines.action_engine import _rule_based_recommendations
 from .engines.detection_engine import Detection
 from .models.database import (
-    AIRecommendation, GreenScoreHistory, InventoryBatch, Product, Sale, Store,
+    AIRecommendation, GreenScoreHistory, InventoryBatch, Invoice, InvoiceItem, Product, Sale, Store,
     Supplier, User, WasteEvent, create_all, drop_all, utcnow,
 )
 from .security import hash_password
@@ -365,6 +366,93 @@ def _run_seed(db: Session) -> dict:
     db.add_all(sale_rows)
     db.flush()
 
+    # --- mirror the sales as real invoices (analytics/AI read invoices) ----
+    # The detection engine reads the legacy Sale table; the analytics and AI
+    # engines read Invoice/InvoiceItem (what the runtime POS writes). Create a
+    # matching invoice trail so every engine sees the same demo transactions.
+    product_by_id = {p.id: p for p in products}
+    by_day: dict[date, list[Sale]] = defaultdict(list)
+    for s in sale_rows:
+        by_day[s.sale_date.date()].append(s)
+
+    invoice_no = 0
+    for _day in sorted(by_day):
+        rows = by_day[_day]
+        rows.sort(key=lambda s: s.sale_date)
+        # chunk each day into checkout-sized baskets so association analysis
+        # sees realistic multi-item invoices
+        i = 0
+        while i < len(rows):
+            size = rng.randint(2, 6)
+            chunk = rows[i:i + size]
+            i += size
+            checkout = max(s.sale_date for s in chunk)
+            subtotal = sum(float(s.sale_price or 0) * s.quantity_sold for s in chunk)
+            gst = sum(float(s.gst_amount or 0) for s in chunk)
+            grand = subtotal + gst
+            invoice = Invoice(
+                invoice_number=f"INV-DEMO-{invoice_no:06d}",
+                store_id=store1.id, cashier_id=users[0].id,
+                subtotal=round(subtotal, 2), total_discount=0.0,
+                total_gst=round(gst, 2), grand_total=round(grand, 2),
+                payment_method="CASH", amount_paid=round(grand, 2), change_due=0.0,
+                created_at=checkout,
+            )
+            db.add(invoice)
+            db.flush()
+            for s in chunk:
+                p = product_by_id[s.product_id]
+                taxable = float(s.sale_price or 0) * s.quantity_sold
+                db.add(InvoiceItem(
+                    invoice_id=invoice.id, product_id=s.product_id, batch_id=s.batch_id,
+                    quantity=s.quantity_sold, unit_price=float(s.sale_price or 0),
+                    discount_amount=0.0, taxable_amount=round(taxable, 2),
+                    gst_rate=float(p.gst_rate or 0), gst_amount=float(s.gst_amount or 0),
+                    line_total=round(taxable + float(s.gst_amount or 0), 2),
+                    created_at=s.sale_date,
+                ))
+            invoice_no += 1
+
+    # Plant one genuine co-purchase pattern (Amul Butter + Britannia Bread) so
+    # the association engine has a real signal to find in the demo — the rest
+    # of the chunking is random, which correctly yields lift ≈ 1. Each affinity
+    # basket also gets a matching Sale row so detection sees the same sales.
+    batch_by_product = {b.product_id: b.id for b in batches}
+    third_pool = [p for p in products if p.id not in {amul.id, bread.id}]
+    for _ in range(60):
+        day_offset = rng.randint(0, 29)
+        ts = utcnow().replace(hour=0, minute=0, second=0, microsecond=0) \
+            - timedelta(days=day_offset) + timedelta(hours=rng.randint(9, 20))
+        items = [(amul, amul_batch.id), (bread, bread_batch.id)]
+        if rng.random() < 0.5:
+            extra = rng.choice(third_pool)
+            items.append((extra, batch_by_product.get(extra.id)))
+        subtotal = sum(float(p.selling_price or 0) for p, _ in items)
+        invoice = Invoice(
+            invoice_number=f"INV-DEMO-{invoice_no:06d}", store_id=store1.id,
+            cashier_id=users[0].id, subtotal=round(subtotal, 2), total_discount=0.0,
+            total_gst=0.0, grand_total=round(subtotal, 2), payment_method="CASH",
+            amount_paid=round(subtotal, 2), change_due=0.0, created_at=ts,
+        )
+        db.add(invoice)
+        db.flush()
+        for p, bid in items:
+            if bid is None:
+                continue
+            price = float(p.selling_price or 0)
+            db.add(InvoiceItem(
+                invoice_id=invoice.id, product_id=p.id, batch_id=bid,
+                quantity=1, unit_price=price, discount_amount=0.0,
+                taxable_amount=round(price, 2), gst_rate=0.0, gst_amount=0.0,
+                line_total=round(price, 2), created_at=ts,
+            ))
+            db.add(Sale(
+                store_id=store1.id, product_id=p.id, batch_id=bid,
+                quantity_sold=1, sale_price=price, gst_amount=0.0,
+                customer_id=None, sale_date=ts, pos_session_id=None,
+            ))
+        invoice_no += 1
+
     # --- 5 PENDING recommendations (alerts badge = 5) ----------------------
     def make_detection(product, batch, risk_type, severity, value, metadata=None) -> Detection:
         return Detection(risk_type=risk_type, severity=severity, product_id=product.id,
@@ -423,8 +511,11 @@ def _run_seed(db: Session) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Seed GreenShop AI demo data")
     parser.add_argument("--force", action="store_true", help="Drop and recreate all tables before seeding")
+    parser.add_argument("--seed-demo", action="store_true", help="Opt into demo seeding (running the seeder is itself an explicit opt-in)")
     args = parser.parse_args()
 
+    # Running the seeder directly is an explicit opt-in — demo data is never
+    # injected into a running production app (that is gated by SEED_DEMO).
     if args.force:
         drop_all()
         create_all()

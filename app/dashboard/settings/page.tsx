@@ -59,12 +59,7 @@ const INITIAL_ROLES: Role[] = [
   }
 ];
 
-const INITIAL_USERS: UserType[] = [
-  { id: 1, name: "Rahul Verma", email: "rahul@greenshop.ai", role: "Owner", status: "Active" },
-  { id: 2, name: "Priya Sharma", email: "priya@greenshop.ai", role: "Worker", status: "Active" },
-  { id: 3, name: "Amit Kumar", email: "amit@greenshop.ai", role: "Bill", status: "Inactive" },
-  { id: 4, name: "Neha Gupta", email: "neha@greenshop.ai", role: "Worker", status: "Active" },
-];
+// Removed INITIAL_USERS mock data
 
 const PERMISSION_MODULES = [
   'Inventory Management',
@@ -87,25 +82,76 @@ export default function SettingsPage() {
   const [showAddRoleModal, setShowAddRoleModal] = useState(false);
   const [newRoleName, setNewRoleName] = useState("");
 
-  // Load from localStorage on mount
-  useEffect(() => {
-    const savedRoles = localStorage.getItem("gs_roles");
-    if (savedRoles) setRoles(JSON.parse(savedRoles));
-    else setRoles(INITIAL_ROLES);
+  // State for Store Settings
+  const [storeForm, setStoreForm] = useState({
+    name: "GreenShop AI",
+    id: "GS-01",
+    phone: "+91 98765 43210",
+    gst_number: "27ABCDE1234F1Z5",
+    address: "123 Market Yard, Retail Hub, Bengaluru",
+    city: "Bengaluru"
+  });
+  const [storeSaving, setStoreSaving] = useState(false);
+  const [storeSuccess, setStoreSuccess] = useState(false);
 
-    const savedUsers = localStorage.getItem("gs_users");
-    if (savedUsers) setUsers(JSON.parse(savedUsers));
-    else setUsers(INITIAL_USERS);
+  useEffect(() => {
+    import("@/lib/api-client").then(({ apiFetch }) => {
+      apiFetch<any>("/api/stores/current")
+        .then(s => {
+          if (s) {
+            setStoreForm({
+              name: s.name || "GreenShop AI",
+              id: s.id ? s.id.substring(0, 8).toUpperCase() : "GS-01",
+              phone: s.phone || "+91 98765 43210",
+              gst_number: s.gst_number || "27ABCDE1234F1Z5",
+              address: s.address || "123 Market Yard, Retail Hub",
+              city: s.city || "Bengaluru"
+            });
+          }
+        })
+        .catch(() => null);
+    });
   }, []);
 
-  // Save to localStorage on change
-  useEffect(() => {
-    if (roles.length > 0) localStorage.setItem("gs_roles", JSON.stringify(roles));
-  }, [roles]);
+  async function handleSaveStore(e: React.FormEvent) {
+    e.preventDefault();
+    setStoreSaving(true);
+    setStoreSuccess(false);
+    try {
+      const { apiFetch } = await import("@/lib/api-client");
+      const updated = await apiFetch<any>("/api/stores/current", {
+        method: "PUT",
+        body: JSON.stringify({
+          name: storeForm.name,
+          phone: storeForm.phone,
+          gst_number: storeForm.gst_number,
+          address: storeForm.address,
+          city: storeForm.city
+        })
+      });
+      if (updated) {
+        setStoreSuccess(true);
+        setTimeout(() => setStoreSuccess(false), 3000);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save store settings");
+    } finally {
+      setStoreSaving(false);
+    }
+  }
 
+  // Load roles (hardcoded for now as per backend) and users from API
   useEffect(() => {
-    if (users.length > 0) localStorage.setItem("gs_users", JSON.stringify(users));
-  }, [users]);
+    setRoles(INITIAL_ROLES);
+    import("@/lib/api-client").then(({ apiFetch }) => {
+      apiFetch<UserType[]>("/api/auth/users")
+        .then(data => {
+          if (data) setUsers(data);
+        })
+        .catch(err => console.error("Failed to fetch users", err));
+    });
+  }, []);
 
   const activeRole = roles.find(r => r.id === activeRoleId);
 
@@ -207,47 +253,81 @@ export default function SettingsPage() {
       <div className="pt-4">
         {activeTab === "store" && (
           <div className="max-w-2xl space-y-6">
-            <div className="glass-panel p-6 bg-white border border-slate-200 rounded-xl">
-              <h3 className="text-base font-bold text-slate-800 mb-6">General Information</h3>
-              <form className="space-y-5" onSubmit={e => e.preventDefault()}>
+            <div className="glass-panel p-6 bg-bg-surface border border-border-default rounded-xl shadow-sm">
+              <h3 className="text-base font-bold text-text-primary mb-6">General Information</h3>
+              {storeSuccess && (
+                <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold rounded-lg flex items-center justify-between">
+                  <span>✓ Store details saved successfully! Thermal receipts will reflect your updated shop name and GST number.</span>
+                </div>
+              )}
+              <form className="space-y-5" onSubmit={handleSaveStore}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-600">Store Name</label>
-                    <input type="text" defaultValue="GreenShop AI - Koramangala" className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" />
+                    <label className="text-xs font-semibold text-text-secondary">Shop / Store Name</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={storeForm.name} 
+                      onChange={e => setStoreForm({...storeForm, name: e.target.value})}
+                      className="w-full bg-slate-50 border border-border-default rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green font-medium" 
+                    />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-600">Store ID</label>
-                    <input type="text" defaultValue="GS-KOR-01" disabled className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-500 cursor-not-allowed" />
+                    <label className="text-xs font-semibold text-text-secondary">Store ID</label>
+                    <input 
+                      type="text" 
+                      value={storeForm.id} 
+                      disabled 
+                      className="w-full bg-slate-100 border border-border-default rounded-lg px-3 py-2 text-sm text-text-muted cursor-not-allowed font-mono" 
+                    />
                   </div>
                 </div>
-                
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-600">Contact Email</label>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input type="email" defaultValue="contact@greenshop.ai" className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-text-secondary">GST Number (GSTIN)</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. 27ABCDE1234F1Z5"
+                      value={storeForm.gst_number} 
+                      onChange={e => setStoreForm({...storeForm, gst_number: e.target.value})}
+                      className="w-full bg-slate-50 border border-border-default rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green font-mono uppercase" 
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-text-secondary">Phone Number</label>
+                    <div className="relative">
+                      <Phone className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input 
+                        type="text" 
+                        value={storeForm.phone} 
+                        onChange={e => setStoreForm({...storeForm, phone: e.target.value})}
+                        className="w-full bg-slate-50 border border-border-default rounded-lg pl-9 pr-3 py-2 text-sm text-text-primary focus:outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green" 
+                      />
+                    </div>
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-600">Phone Number</label>
+                  <label className="text-xs font-semibold text-text-secondary">Address</label>
                   <div className="relative">
-                    <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input type="text" defaultValue="+91 98765 43210" className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-600">Address</label>
-                  <div className="relative">
-                    <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                    <textarea rows={3} defaultValue="123, 4th Cross, 5th Block, Koramangala, Bengaluru, Karnataka 560095" className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"></textarea>
+                    <MapPin className="w-4 h-4 text-text-muted absolute left-3 top-3" />
+                    <textarea 
+                      rows={3} 
+                      value={storeForm.address} 
+                      onChange={e => setStoreForm({...storeForm, address: e.target.value})}
+                      className="w-full bg-slate-50 border border-border-default rounded-lg pl-9 pr-3 py-2 text-sm text-text-primary focus:outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green"
+                    ></textarea>
                   </div>
                 </div>
 
                 <div className="flex justify-end pt-4">
-                  <button type="button" className="bg-[#0FA958] hover:bg-green-600 text-white px-5 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm">
-                    Save Changes
+                  <button 
+                    type="submit" 
+                    disabled={storeSaving}
+                    className="bg-brand-green hover:bg-brand-green/90 text-black px-5 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm disabled:opacity-50"
+                  >
+                    {storeSaving ? "Saving..." : "Save Changes"}
                   </button>
                 </div>
               </form>
@@ -258,31 +338,31 @@ export default function SettingsPage() {
         {activeTab === "users" && (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
-              <h3 className="text-base font-bold text-slate-800">Team Members</h3>
+              <h3 className="text-base font-bold text-text-primary">Team Members</h3>
               <button 
                 onClick={() => setShowAddUserModal(true)}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm"
+                className="flex items-center gap-2 bg-brand-green hover:bg-brand-green/90 text-black px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm"
               >
                 <Plus className="w-4 h-4" />
                 Add User
               </button>
             </div>
 
-            <div className="glass-panel overflow-hidden bg-white border border-slate-200 rounded-xl shadow-sm">
+            <div className="glass-panel overflow-hidden bg-bg-surface border border-border-default rounded-xl shadow-sm">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead>
-                    <tr className="bg-slate-50 border-b border-slate-100 text-slate-500">
+                    <tr className="bg-slate-50/50 border-b border-border-default text-text-muted">
                       <th className="px-4 py-3 font-semibold">User</th>
                       <th className="px-4 py-3 font-semibold">Role</th>
                       <th className="px-4 py-3 font-semibold">Status</th>
                       <th className="px-4 py-3 font-semibold text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-border-default/50">
                     {users.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
+                        <td colSpan={4} className="px-4 py-8 text-center text-text-muted">
                           No users found.
                         </td>
                       </tr>
@@ -291,29 +371,29 @@ export default function SettingsPage() {
                       <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                            <div className="w-8 h-8 rounded-full bg-brand-green/20 text-brand-green flex items-center justify-center font-bold text-xs uppercase shrink-0">
                               {user.name.split(' ').map(n => n[0]).join('').substring(0, 2)}
                             </div>
                             <div>
-                              <div className="font-semibold text-slate-800">{user.name}</div>
-                              <div className="text-xs text-slate-500">{user.email}</div>
+                              <div className="font-semibold text-text-primary">{user.name}</div>
+                              <div className="text-xs text-text-secondary">{user.email}</div>
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-slate-600 font-medium">
-                          <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md text-xs border border-slate-200">
+                        <td className="px-4 py-3 text-text-secondary font-medium">
+                          <span className="bg-slate-50 text-text-primary px-2.5 py-1 rounded-md text-xs border border-border-default">
                             {user.role}
                           </span>
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5">
-                            <div className={`w-2 h-2 rounded-full ${user.status === 'Active' ? 'bg-green-500' : 'bg-slate-300'}`}></div>
-                            <span className="text-slate-600 text-xs font-medium">{user.status}</span>
+                            <div className={`w-2 h-2 rounded-full ${user.status === 'Active' ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
+                            <span className="text-text-secondary text-xs font-medium">{user.status}</span>
                           </div>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <div className="flex justify-end gap-2 text-slate-400">
-                            <button className="p-1.5 hover:bg-slate-100 hover:text-blue-600 transition-colors rounded-lg">
+                          <div className="flex justify-end gap-2 text-text-muted">
+                            <button className="p-1.5 hover:bg-slate-50 hover:text-brand-green transition-colors rounded-lg">
                               <Edit className="w-4 h-4" />
                             </button>
                             <button 
@@ -336,12 +416,12 @@ export default function SettingsPage() {
         {activeTab === "roles" && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
             {/* Roles List */}
-            <div className="glass-panel p-4 md:col-span-1 h-fit bg-white border border-slate-200 rounded-xl shadow-sm">
+            <div className="glass-panel p-4 md:col-span-1 h-fit bg-bg-surface border border-border-default rounded-xl shadow-sm">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-sm font-bold text-slate-800">Available Roles</h3>
+                <h3 className="text-sm font-bold text-text-primary">Available Roles</h3>
                 <button 
                   onClick={() => setShowAddRoleModal(true)}
-                  className="p-1.5 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-md transition-colors"
+                  className="p-1.5 bg-slate-50 text-text-secondary hover:bg-slate-100 rounded-md transition-colors border border-border-default"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -353,8 +433,8 @@ export default function SettingsPage() {
                     onClick={() => setActiveRoleId(role.id)}
                     className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                       activeRoleId === role.id 
-                        ? 'bg-green-50 text-green-700 border border-green-200 shadow-sm' 
-                        : 'text-slate-600 hover:bg-slate-50 border border-transparent'
+                        ? 'bg-brand-green/20 text-brand-green border border-brand-green shadow-sm' 
+                        : 'text-text-secondary hover:bg-slate-50 border border-transparent'
                     }`}
                   >
                     {role.name}
@@ -365,11 +445,11 @@ export default function SettingsPage() {
 
             {/* Role Editor */}
             {activeRole && (
-              <div className="glass-panel p-6 md:col-span-2 bg-white border border-slate-200 rounded-xl shadow-sm">
-                <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4">
+              <div className="glass-panel p-6 md:col-span-2 bg-bg-surface border border-border-default rounded-xl shadow-sm">
+                <div className="flex justify-between items-center border-b border-border-default pb-4 mb-4">
                   <div>
-                    <h3 className="text-base font-bold text-slate-900">Edit Role: {activeRole.name}</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">Manage permissions for this role.</p>
+                    <h3 className="text-base font-bold text-text-primary">Edit Role: {activeRole.name}</h3>
+                    <p className="text-xs text-text-secondary mt-0.5">Manage permissions for this role.</p>
                   </div>
                   <button 
                     onClick={() => handleDeleteRole(activeRole.id)}
@@ -381,10 +461,10 @@ export default function SettingsPage() {
 
                 <div className="space-y-4">
                   {PERMISSION_MODULES.map((module) => (
-                    <div key={module} className="border border-slate-100 rounded-lg p-4 bg-slate-50/30">
+                    <div key={module} className="border border-border-default rounded-lg p-4 bg-slate-50/30">
                       <div className="flex justify-between items-center mb-3">
-                        <h4 className="text-sm font-bold text-slate-800">{module}</h4>
-                        <label className="flex items-center gap-2 cursor-pointer group text-xs text-slate-500 hover:text-green-600 transition-colors">
+                        <h4 className="text-sm font-bold text-text-primary">{module}</h4>
+                        <label className="flex items-center gap-2 cursor-pointer group text-xs text-text-secondary hover:text-brand-green transition-colors">
                           <input 
                             type="checkbox" 
                             checked={
@@ -408,7 +488,7 @@ export default function SettingsPage() {
                                 return r;
                               }));
                             }}
-                            className="w-3.5 h-3.5 text-[#0FA958] bg-white border-slate-300 rounded focus:ring-[#0FA958] focus:ring-offset-0 cursor-pointer" 
+                            className="w-3.5 h-3.5 text-brand-green bg-white border-border-default rounded focus:ring-brand-green focus:ring-offset-0 cursor-pointer" 
                           />
                           Select All
                         </label>
@@ -421,10 +501,10 @@ export default function SettingsPage() {
                                 type="checkbox" 
                                 checked={activeRole.permissions[module]?.[perm] || false}
                                 onChange={() => handleTogglePermission(module, perm)}
-                                className="w-4 h-4 text-[#0FA958] bg-white border-slate-300 rounded focus:ring-[#0FA958] focus:ring-offset-0 cursor-pointer" 
+                                className="w-4 h-4 text-brand-green bg-white border-border-default rounded focus:ring-brand-green focus:ring-offset-0 cursor-pointer" 
                               />
                             </div>
-                            <span className="text-sm text-slate-600 group-hover:text-slate-900 capitalize select-none">
+                            <span className="text-sm text-text-secondary group-hover:text-text-primary capitalize select-none">
                               {perm}
                             </span>
                           </label>
@@ -434,10 +514,10 @@ export default function SettingsPage() {
                   ))}
                 </div>
 
-                <div className="flex justify-end pt-6 mt-6 border-t border-slate-100">
+                <div className="flex justify-end pt-6 mt-6 border-t border-border-default">
                   <button 
                     onClick={() => alert('Permissions saved successfully!')}
-                    className="bg-[#0FA958] hover:bg-green-600 text-white px-5 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm"
+                    className="bg-brand-green hover:bg-brand-green/90 text-black px-5 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm"
                   >
                     Save Permissions
                   </button>
@@ -451,43 +531,43 @@ export default function SettingsPage() {
       {/* Add User Modal */}
       {showAddUserModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h3 className="font-bold text-slate-800">Add New Team Member</h3>
-              <button onClick={() => setShowAddUserModal(false)} className="text-slate-400 hover:text-slate-600">
+          <div className="bg-bg-surface rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="px-6 py-4 border-b border-border-default flex justify-between items-center bg-slate-50">
+              <h3 className="font-bold text-text-primary">Add New Team Member</h3>
+              <button onClick={() => setShowAddUserModal(false)} className="text-text-muted hover:text-text-secondary">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <form onSubmit={handleAddUser} className="p-6 space-y-4">
+            <form onSubmit={handleAddUser} className="p-6 space-y-4 bg-bg-surface">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-600">Full Name</label>
+                <label className="text-xs font-semibold text-text-secondary">Full Name</label>
                 <input 
                   type="text" 
                   required
                   value={newUser.name}
                   onChange={e => setNewUser({...newUser, name: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" 
+                  className="w-full bg-bg-surface border border-border-default rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green text-text-primary" 
                   placeholder="e.g. John Doe"
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-600">Email Address</label>
+                <label className="text-xs font-semibold text-text-secondary">Email Address</label>
                 <input 
                   type="email" 
                   required
                   value={newUser.email}
                   onChange={e => setNewUser({...newUser, email: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" 
+                  className="w-full bg-bg-surface border border-border-default rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green text-text-primary" 
                   placeholder="john@example.com"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-600">Role</label>
+                  <label className="text-xs font-semibold text-text-secondary">Role</label>
                   <select 
                     value={newUser.role}
                     onChange={e => setNewUser({...newUser, role: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    className="w-full bg-bg-surface border border-border-default rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green text-text-primary"
                   >
                     {roles.map(r => (
                       <option key={r.id} value={r.name}>{r.name}</option>
@@ -495,28 +575,28 @@ export default function SettingsPage() {
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-600">Status</label>
+                  <label className="text-xs font-semibold text-text-secondary">Status</label>
                   <select 
                     value={newUser.status}
                     onChange={e => setNewUser({...newUser, status: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    className="w-full bg-bg-surface border border-border-default rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green text-text-primary"
                   >
                     <option value="Active">Active</option>
                     <option value="Inactive">Inactive</option>
                   </select>
                 </div>
               </div>
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 mt-6">
+              <div className="flex justify-end gap-3 pt-4 border-t border-border-default mt-6">
                 <button 
                   type="button" 
                   onClick={() => setShowAddUserModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-text-secondary hover:bg-slate-50 rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit" 
-                  className="px-4 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"
+                  className="px-4 py-2 text-sm font-bold text-black bg-brand-green hover:bg-brand-green/90 rounded-lg transition-colors shadow-sm"
                 >
                   Add Member
                 </button>
@@ -529,37 +609,37 @@ export default function SettingsPage() {
       {/* Add Role Modal */}
       {showAddRoleModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h3 className="font-bold text-slate-800">Create New Role</h3>
-              <button onClick={() => setShowAddRoleModal(false)} className="text-slate-400 hover:text-slate-600">
+          <div className="bg-bg-surface rounded-xl shadow-xl w-full max-w-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-border-default flex justify-between items-center bg-slate-50">
+              <h3 className="font-bold text-text-primary">Create New Role</h3>
+              <button onClick={() => setShowAddRoleModal(false)} className="text-text-muted hover:text-text-secondary">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <form onSubmit={handleAddRole} className="p-6 space-y-4">
+            <form onSubmit={handleAddRole} className="p-6 space-y-4 bg-bg-surface">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-600">Role Name</label>
+                <label className="text-xs font-semibold text-text-secondary">Role Name</label>
                 <input 
                   type="text" 
                   required
                   autoFocus
                   value={newRoleName}
                   onChange={e => setNewRoleName(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500" 
+                  className="w-full bg-bg-surface border border-border-default rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green text-text-primary" 
                   placeholder="e.g. Manager"
                 />
               </div>
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 mt-6">
+              <div className="flex justify-end gap-3 pt-4 border-t border-border-default mt-6">
                 <button 
                   type="button" 
                   onClick={() => setShowAddRoleModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-text-secondary hover:bg-slate-50 rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit" 
-                  className="px-4 py-2 text-sm font-bold text-white bg-[#0FA958] hover:bg-green-600 rounded-lg transition-colors shadow-sm"
+                  className="px-4 py-2 text-sm font-bold text-black bg-brand-green hover:bg-brand-green/90 rounded-lg transition-colors shadow-sm"
                 >
                   Create Role
                 </button>

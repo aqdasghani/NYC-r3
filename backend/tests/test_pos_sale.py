@@ -20,7 +20,7 @@ def test_pos_sale_returns_receipt(client, owner_headers, db):
                     json={"items": [{"barcode": barcode, "quantity": 2}]})
     assert r.status_code == 200, r.text
     receipt = r.json()["receipt"]
-    assert receipt["receipt_no"].startswith("GS-")
+    assert receipt["receipt_no"].startswith("INV-")
     assert receipt["grand_total"] > 0
     assert receipt["lines"] and receipt["lines"][0]["qty"] == 2
     # FEFO allocation picks the earliest-expiring batch and deducts from it
@@ -55,10 +55,10 @@ def test_pos_sale_staff_allowed(client, staff_headers):
 
 
 def test_sales_transactions_and_trend(client, owner_headers):
-    tx = client.get("/api/sales/transactions", headers=owner_headers)
+    tx = client.get("/api/inventory/transactions", headers=owner_headers)
     assert tx.status_code == 200
     assert len(tx.json()) > 0
-    trend = client.get("/api/sales/trend", headers=owner_headers)
+    trend = client.get("/api/analytics/sales-trend?days=30", headers=owner_headers)
     assert trend.status_code == 200
     assert len(trend.json()) == 30
     assert trend.json()[-1]["revenue"] > 0

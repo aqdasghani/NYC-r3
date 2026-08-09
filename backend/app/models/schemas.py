@@ -1,5 +1,5 @@
-"""Pydantic request/response schemas. Money fields are ``float`` so the
-JS frontend gets numbers (DB stores ``Numeric`` / Decimal)."""
+"""Pydantic request/response schemas. Money fields are ``int`` (paise) for precision.
+JS frontend converts via to_rupees_str() / from_paise() helpers."""
 from __future__ import annotations
 
 import uuid
@@ -16,8 +16,26 @@ class RegisterRequest(BaseModel):
     email: str
     phone: Optional[str] = None
     password: str = Field(min_length=6, max_length=128)
-    role: Literal["OWNER", "WORKER", "BILL"] = "BILL"
     store_name: Optional[str] = None
+
+
+class UserCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    email: str
+    phone: Optional[str] = None
+    password: str = Field(min_length=6, max_length=128)
+    role: Literal["OWNER", "MANAGER", "BILLER", "WORKER"]
+
+
+class InviteRequest(BaseModel):
+    email: str
+    role: Literal["OWNER", "MANAGER", "BILLER", "WORKER"]
+
+
+class InviteAccept(BaseModel):
+    token: str
+    name: str = Field(min_length=1, max_length=255)
+    password: str = Field(min_length=6, max_length=128)
 
 
 class LoginRequest(BaseModel):
@@ -41,13 +59,71 @@ class TokenResponse(BaseModel):
     user: UserOut
 
 
+# OAuth schemas
+class GoogleAuthUrlResponse(BaseModel):
+    auth_url: str
+    state: str
+
+
+class GoogleCallbackRequest(BaseModel):
+    code: str
+    state: str
+
+
+class OAuthLinkRequest(BaseModel):
+    provider: Literal["google"]
+    code: str
+    state: str
+
+
+class EmailVerificationRequest(BaseModel):
+    token: str
+
+
+class PasswordResetRequest(BaseModel):
+    email: str
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    password: str = Field(min_length=6, max_length=128)
+
+
+class StoreOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    owner_id: Optional[uuid.UUID] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    phone: Optional[str] = None
+    gst_number: Optional[str] = None
+    store_type: Optional[str] = None
+    is_active: bool = True
+    created_at: datetime
+
+
+class StoreUpdate(BaseModel):
+    name: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    phone: Optional[str] = None
+    gst_number: Optional[str] = None
+    store_type: Optional[str] = None
+
+
 # ------------------------------------------------------------------ inventory
 
 class ProductCreate(BaseModel):
-    name: str
+    """Mirror the ``products`` table exactly — the schema is the wire contract,
+    so every declared field must be a real column (no fabricated defaults)."""
+
+    name: str = Field(min_length=1, max_length=255)
     sku: Optional[str] = None
     barcode: Optional[str] = None
     category: Optional[str] = None
+    unit: str = "pkt"
     purchase_price: Optional[float] = None
     selling_price: Optional[float] = None
     gst_rate: Optional[float] = None
@@ -60,6 +136,7 @@ class ProductUpdate(BaseModel):
     sku: Optional[str] = None
     barcode: Optional[str] = None
     category: Optional[str] = None
+    unit: Optional[str] = None
     purchase_price: Optional[float] = None
     selling_price: Optional[float] = None
     gst_rate: Optional[float] = None
@@ -131,7 +208,7 @@ class AtRiskItem(BaseModel):
     days_remaining: int
     severity: str
     value_at_risk: Optional[float] = None
-    expected_leftover: float = 0.0
+    expected_leftover: float = 0.0  # fractional — qty minus velocity×days
     velocity: float = 0.0
 
 
@@ -165,7 +242,7 @@ class ReorderSuggestion(BaseModel):
 
 class StockHealthSegment(BaseModel):
     name: str
-    value: int
+    value: float
     color: str
 
 
@@ -189,19 +266,19 @@ class ReceiptLine(BaseModel):
     batch_id: uuid.UUID
     batch_number: Optional[str] = None
     qty: int
-    unit_price: float
+    unit_price: int
     gst_rate: float
-    gst_amount: float
-    line_total: float
+    gst_amount: int
+    line_total: int
 
 
 class Receipt(BaseModel):
     receipt_no: str
     store_id: uuid.UUID
     lines: list[ReceiptLine]
-    subtotal: float
-    gst_total: float
-    grand_total: float
+    subtotal: int
+    gst_total: int
+    grand_total: int
     timestamp: datetime
 
 
@@ -216,8 +293,8 @@ class SaleOut(BaseModel):
     product_id: uuid.UUID
     batch_id: Optional[uuid.UUID] = None
     quantity_sold: int
-    sale_price: float
-    gst_amount: Optional[float] = None
+    sale_price: int
+    gst_amount: Optional[int] = None
     sale_date: datetime
 
 
@@ -235,7 +312,7 @@ class ExtractedItem(BaseModel):
     matched_product_id: Optional[uuid.UUID] = None
     confidence: float = 0.0
     quantity: int = 0
-    price: Optional[float] = None
+    price: Optional[int] = None
     batch_number: Optional[str] = None
     expiry_date: Optional[date] = None
 
@@ -249,7 +326,7 @@ class ScanInvoiceResponse(BaseModel):
 class ConfirmedItem(BaseModel):
     product_id: uuid.UUID
     quantity: int = Field(gt=0)
-    purchase_price: Optional[float] = None
+    purchase_price: Optional[int] = None
     expiry_date: date
     batch_number: Optional[str] = None
 
@@ -269,20 +346,44 @@ class ConfirmReceiptResponse(BaseModel):
     alerts_triggered: int
 
 
+class TransactionOut(BaseModel):
+    id: uuid.UUID
+    product_id: uuid.UUID
+    product_name: Optional[str] = None
+    batch_id: Optional[uuid.UUID] = None
+    tx_type: str
+    quantity: int
+    note: Optional[str] = None
+    performed_by: Optional[uuid.UUID] = None
+    created_at: datetime
+
+
 # ----------------------------------------------------------------- suppliers
 
 class SupplierCreate(BaseModel):
     name: str
+    contact_person: Optional[str] = None
     contact_phone: Optional[str] = None
     email: Optional[str] = None
     gst_number: Optional[str] = None
+    category: Optional[str] = None
+    address: Optional[str] = None
+    payment_terms: Optional[str] = None
+    lead_time_days: int = 2
+    notes: Optional[str] = None
 
 
 class SupplierUpdate(BaseModel):
     name: Optional[str] = None
+    contact_person: Optional[str] = None
     contact_phone: Optional[str] = None
     email: Optional[str] = None
     gst_number: Optional[str] = None
+    category: Optional[str] = None
+    address: Optional[str] = None
+    payment_terms: Optional[str] = None
+    lead_time_days: Optional[int] = None
+    notes: Optional[str] = None
     on_time_delivery_score: Optional[float] = None
     expiry_quality_score: Optional[float] = None
 
@@ -293,11 +394,27 @@ class SupplierOut(BaseModel):
     id: uuid.UUID
     store_id: uuid.UUID
     name: str
+    contact_person: Optional[str] = None
     contact_phone: Optional[str] = None
     email: Optional[str] = None
     gst_number: Optional[str] = None
+    category: Optional[str] = None
+    address: Optional[str] = None
+    payment_terms: Optional[str] = None
+    lead_time_days: int = 2
+    notes: Optional[str] = None
     on_time_delivery_score: Optional[float] = None
     expiry_quality_score: Optional[float] = None
+    created_at: datetime
+
+
+class SupplierSummaryOut(BaseModel):
+    total_active: int
+    new_this_month: int
+    avg_fulfillment: float
+    pending_orders_count: int
+    pending_orders_supplier_count: int
+    issues_delays_count: int
 
 
 class SupplierScorecardOut(BaseModel):
@@ -340,7 +457,7 @@ class ExecuteActionRequest(BaseModel):
 
 
 class ExecuteActionResponse(BaseModel):
-    waste_prevented: float
+    waste_prevented: int
     green_score_delta: float
     items_cleared: int
     new_status: str
@@ -387,6 +504,9 @@ class DashboardKpis(BaseModel):
     expired_count: int
     expired_value: float
     waste_prevented_mtd: float
+    today_revenue: float = 0.0
+    today_orders: int = 0
+    today_units: int = 0
 
 
 class AiPriorityAction(BaseModel):
@@ -483,13 +603,113 @@ class MonthlyReportOut(BaseModel):
     id: uuid.UUID
     store_id: uuid.UUID
     month_year: str
-    total_sales: float
+    total_sales: int
     total_transactions: int
-    waste_prevented_value: float
-    actual_waste_value: float
+    waste_prevented_value: int
+    actual_waste_value: int
     avg_green_score: float
     top_category: Optional[str] = None
     top_selling_product: Optional[str] = None
     summary_json: dict = {}
     created_at: datetime
+
+
+# ---------------------------------------------------------------- purchase orders
+
+class PurchaseOrderItemCreate(BaseModel):
+    product_id: uuid.UUID
+    quantity: int
+    unit_price: Optional[int] = None
+
+
+class PurchaseOrderCreate(BaseModel):
+    supplier_id: uuid.UUID
+    status: str = "Pending"
+    expected_delivery: Optional[date] = None
+    items: list[PurchaseOrderItemCreate] = []
+
+
+class PurchaseOrderItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    purchase_order_id: uuid.UUID
+    product_id: uuid.UUID
+    quantity: int
+    unit_price: Optional[int] = None
+
+
+class PurchaseOrderOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    store_id: uuid.UUID
+    supplier_id: uuid.UUID
+    status: str
+    expected_delivery: Optional[date] = None
+    created_at: datetime
+    items: list[PurchaseOrderItemOut] = []
+
+
+# ---------------------------------------------------------------- transfers
+
+class StockTransferCreate(BaseModel):
+    to_store_id: uuid.UUID
+    product_id: uuid.UUID
+    quantity: int = Field(gt=0)
+    status: str = "PENDING"
+
+
+class StockTransferOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    from_store_id: uuid.UUID
+    to_store_id: uuid.UUID
+    product_id: uuid.UUID
+    quantity: int
+    status: str
+    created_at: datetime
+
+
+# ---------------------------------------------------------------- returns
+
+class ReturnCreate(BaseModel):
+    pos_session_id: Optional[uuid.UUID] = None
+    product_id: uuid.UUID
+    quantity: int
+    reason: Optional[str] = None
+    status: str = "PENDING"
+
+
+class ReturnOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    store_id: uuid.UUID
+    pos_session_id: Optional[uuid.UUID] = None
+    product_id: uuid.UUID
+    quantity: int
+    reason: Optional[str] = None
+    status: str
+    created_at: datetime
+
+
+# ---------------------------------------------------------------- whatsapp new
+
+class WhatsappMessageCreate(BaseModel):
+    customer_phone: str
+    message_text: str
+    is_from_customer: bool = True
+
+
+class WhatsappMessageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    store_id: uuid.UUID
+    customer_phone: str
+    message_text: str
+    is_from_customer: bool
+    timestamp: datetime
 

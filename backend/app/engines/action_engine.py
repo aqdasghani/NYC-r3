@@ -40,7 +40,7 @@ def _rule_based_recommendations(detection, product=None) -> list[Recommendation]
     elasticity_discount = min(50, max(10, round((expected_leftover / max(1.0, qty)) * 40)))
 
     if "expiry" in risk or "waste" in risk:
-        discount = 35 if detection.severity == "CRITICAL" else elasticity_discount
+        discount = 25 if detection.severity == "CRITICAL" else elasticity_discount
         actions = [
             ("DISCOUNT", {"percent": discount}, value * 0.8, f"Dynamic discount of {discount}% to clear stock before expiry."),
             ("TRANSFER", {"percent_units": 50}, value * 0.5, "Move half the batch to a faster-selling store."),

@@ -1,32 +1,34 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { PackageSearch, Clock, Plus, Search, RefreshCw } from "lucide-react";
 import Link from "next/link";
+import { PackageSearch, Clock, Plus, RefreshCw, CheckCircle2 } from "lucide-react";
 import { getInventory, getKPIs, getStockHealth } from "@/lib/api";
+import { apiFetch } from "@/lib/api-client";
 import { subscribeLive } from "@/lib/live";
 import type { InventoryItem, KPI, StockHealthSegment } from "@/lib/types";
 import { formatINR } from "@/lib/utils";
+import { Button, Card, CardHeader, DataTable, type Column, KpiCard, StatusBadge } from "@/components/ui";
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.1 } },
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+const STATUS_LABELS: Record<string, string> = {
+  CRITICAL: "Critical (0-3d)",
+  WARNING: "Warning (4-15d)",
+  UPCOMING: "Upcoming (16-30d)",
+  SAFE: "Safe (30d+)",
+  DEAD_STOCK: "Dead Stock",
+  OVERSTOCK: "Overstock",
 };
 
-const itemVariants = {
-  hidden: { opacity: 0, y: 10 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.4 } },
-};
-
-const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  CRITICAL: { label: "Critical (0-3d)", cls: "bg-red-500/10 text-red-500 border border-red-500/20" },
-  WARNING: { label: "Warning (4-15d)", cls: "bg-orange-500/10 text-orange-500 border border-orange-500/20" },
-  UPCOMING: { label: "Upcoming (16-30d)", cls: "bg-blue-500/10 text-blue-500 border border-blue-500/20" },
-  SAFE: { label: "Safe (30d+)", cls: "bg-brand-green/10 text-brand-green border border-brand-green/20" },
-  DEAD_STOCK: { label: "Dead Stock", cls: "bg-slate-200/50 text-text-secondary border border-slate-300/50" },
-  OVERSTOCK: { label: "Overstock", cls: "bg-purple-500/10 text-purple-500 border border-purple-500/20" },
-};
+interface ReorderRow {
+  product_name?: string;
+  current_stock?: number;
+  velocity_per_day?: number;
+  days_until_stockout?: number;
+  suggested_order_qty?: number;
+  [key: string]: unknown;
+}
 
 export default function InventoryPage() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -34,6 +36,18 @@ export default function InventoryPage() {
   const [stockHealth, setStockHealth] = useState<StockHealthSegment[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [atRisk, setAtRisk] = useState<any[]>([]);
+  const [deadStockData, setDeadStockData] = useState<any[]>([]);
+  const [reorderSuggestions, setReorderSuggestions] = useState<ReorderRow[]>([]);
+  const [intelligenceLoading, setIntelligenceLoading] = useState(true);
+
+  async function fetchWithAuth(path: string) {
+    try {
+      return await apiFetch<any>(path);
+    } catch {
+      return [];
+    }
+  }
 
   const load = async () => {
     setLoading(true);
@@ -42,6 +56,22 @@ export default function InventoryPage() {
     setKpis(kpiData);
     setStockHealth(health);
     setLoading(false);
+
+    setIntelligenceLoading(true);
+    try {
+      const [ar, ds, rs] = await Promise.all([
+        fetchWithAuth("/api/inventory/at-risk"),
+        fetchWithAuth("/api/inventory/dead-stock"),
+        fetchWithAuth("/api/inventory/reorder-suggestions"),
+      ]);
+      setAtRisk(ar.items || ar || []);
+      setDeadStockData(ds.items || ds || []);
+      setReorderSuggestions(rs.items || rs || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIntelligenceLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -64,135 +94,200 @@ export default function InventoryPage() {
   const totalQty = inventory.reduce((sum, i) => sum + i.batch.qty, 0);
 
   const stats = [
-    { label: "At-Risk Batches", value: String(inventory.length), color: "text-orange-500" },
-    { label: "Units at Risk", value: totalQty.toLocaleString("en-IN"), color: "text-text-primary" },
-    { label: "Value at Risk", value: formatINR(kpiValue("at_risk")), color: "text-red-500" },
-    { label: "Critical Expiry", value: String(criticalCount), color: "text-red-500" },
-    { label: "Dead Stock", value: String(deadStock), color: "text-slate-500" },
+    { label: "At-Risk Batches", value: String(inventory.length) },
+    { label: "Units at Risk", value: totalQty.toLocaleString("en-IN") },
+    { label: "Value at Risk", value: formatINR(kpiValue("at_risk")) },
+    { label: "Critical Expiry", value: String(criticalCount) },
+    { label: "Dead Stock", value: String(deadStock) },
+  ];
+
+  const nearExpiryCount = atRisk.filter((i) => i.days_remaining >= 0 && i.days_remaining <= 15).length;
+  const expiredCount = atRisk.filter((i) => i.days_remaining < 0).length;
+  const healthyStockCount = inventory.length - nearExpiryCount - expiredCount - deadStockData.length;
+  const overstockCount = inventory.filter((i) => i.product.status === "OVERSTOCK").length;
+  const lowStockCount = inventory.filter((i) => (i.product.velocityPerDay * 7) >= i.batch.qty).length;
+
+  const healthCards = [
+    { label: "Healthy Stock", value: Math.max(0, healthyStockCount), tone: "text-brand" as const },
+    { label: "Low Stock", value: lowStockCount, tone: "text-warning" as const },
+    { label: "Near Expiry", value: nearExpiryCount, tone: "text-warning" as const },
+    { label: "Overstock", value: overstockCount, tone: "text-info" as const },
+    { label: "Dead Stock", value: deadStockData.length, tone: "text-muted" as const },
+    { label: "Expired", value: expiredCount, tone: "text-danger" as const },
+  ];
+
+  const columns: Column<InventoryItem>[] = [
+    {
+      key: "product",
+      header: "Product",
+      sortValue: (r) => r.product.name,
+      render: (r) => (
+        <div>
+          <div className="font-medium text-ink">{r.product.name}</div>
+          <div className="text-xs text-muted">
+            Batch: {r.batch.batchCode || "—"} · {r.product.sku || "No SKU"}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "stock",
+      header: "Stock / Velocity",
+      align: "right",
+      sortValue: (r) => r.batch.qty,
+      render: (r) => (
+        <div>
+          <div className="text-ink">{r.batch.qty} units</div>
+          <div className="text-xs text-muted">{r.product.velocityPerDay.toFixed(1)}/day</div>
+        </div>
+      ),
+    },
+    {
+      key: "expiry",
+      header: "Expiry",
+      align: "right",
+      sortValue: (r) => r.expiryDays,
+      render: (r) => (
+        <div className="flex items-center justify-end gap-1">
+          <Clock className="h-3 w-3 text-muted" />
+          <span className={r.expiryDays <= 3 ? "text-danger" : r.expiryDays <= 15 ? "text-warning" : "text-dim"}>
+            {r.expiryDays}d · {r.batch.expiryDate}
+          </span>
+        </div>
+      ),
+    },
+    {
+      key: "risk",
+      header: "Risk Value",
+      align: "right",
+      sortValue: (r) => r.riskValue,
+      render: (r) => <span className="font-medium text-ink">{r.riskValue ? formatINR(r.riskValue) : "—"}</span>,
+    },
+    {
+      key: "status",
+      header: "Status",
+      sortValue: (r) => r.product.status,
+      render: (r) => (
+        <StatusBadge status={r.product.status} label={STATUS_LABELS[r.product.status] ?? undefined} />
+      ),
+    },
   ];
 
   return (
-    <motion.div variants={containerVariants} initial="hidden" animate="show" className="space-y-6">
-      <motion.div variants={itemVariants} className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-6 pb-12">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight mb-2">Inventory & Expiry</h1>
-          <p className="text-text-secondary">Stock expiring within 15 days, flagged by the detection engine.</p>
+          <h1 className="text-xl font-semibold tracking-tight text-ink">Inventory & Expiry</h1>
+          <p className="mt-1 text-sm text-muted">Stock expiring within 15 days, flagged by the detection engine.</p>
         </div>
         <Link
           href="/dashboard/scanner"
-          className="flex items-center gap-2 bg-brand-green text-black px-4 py-2 rounded-lg font-medium hover:bg-brand-green/90 transition-colors shadow-[0_0_15px_rgba(34,197,94,0.3)]"
+          className="inline-flex h-9 items-center gap-2 rounded-md bg-brand px-4 text-sm font-medium text-white transition-colors hover:bg-brand-strong"
         >
-          <Plus className="w-4 h-4" /> Add via Receiving
+          <Plus className="h-4 w-4" /> Add via Receiving
         </Link>
-      </motion.div>
+      </div>
 
-      {/* Stats row */}
-      <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {stats.map((stat, i) => (
-          <div key={i} className="glass-panel p-4 flex flex-col justify-between">
-            <span className="text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">{stat.label}</span>
-            <div className={`text-2xl font-bold ${stat.color}`}>{stat.value}</div>
+      {/* Health grid */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+        {healthCards.map((c) => (
+          <div key={c.label} className="rounded-lg border border-line bg-surface p-4 shadow-card">
+            <div className="text-[11px] font-medium uppercase tracking-wider text-muted">{c.label}</div>
+            <div className={`mt-2 text-2xl font-semibold ${c.tone}`}>{c.value}</div>
           </div>
         ))}
-      </motion.div>
+      </div>
+
+      {/* Reorder suggestions */}
+      <Card noPadding>
+        <CardHeader title="Reorder Suggestions" className="border-b border-line px-4 py-3" />
+        {intelligenceLoading ? (
+          <div className="py-8 text-center text-sm text-muted">Loading suggestions…</div>
+        ) : reorderSuggestions.length === 0 ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-sm font-medium text-brand">
+            <CheckCircle2 className="h-4 w-4" /> All products are well-stocked
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-left">
+              <thead>
+                <tr className="border-b border-line bg-elevated">
+                  {["Product", "Stock", "Velocity", "Days Until Stockout", "Suggested Order Qty"].map((h) => (
+                    <th key={h} className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line-subtle">
+                {reorderSuggestions.map((item, idx) => (
+                  <tr key={idx} className="transition-colors hover:bg-subtle/70">
+                    <td className="px-4 py-3 font-medium text-ink">{item.product_name}</td>
+                    <td className="px-4 py-3 text-dim">{item.current_stock}</td>
+                    <td className="px-4 py-3 text-dim">{item.velocity_per_day}</td>
+                    <td className="px-4 py-3 text-dim">{item.days_until_stockout}</td>
+                    <td className="px-4 py-3 font-medium text-brand">{item.suggested_order_qty}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* Stats row */}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+        {stats.map((stat, i) => (
+          <KpiCard key={i} label={stat.label} value={stat.value} />
+        ))}
+      </div>
 
       {/* Toolbar */}
-      <motion.div variants={itemVariants} className="flex gap-4 mb-4">
+      <div className="flex items-center gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search at-risk products by name or batch…"
-            className="w-full bg-bg-surface border border-border-default text-text-primary rounded-lg pl-10 pr-4 py-2.5 focus:outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green/50 transition-all placeholder:text-text-muted"
+            className="h-9 w-full rounded-md border border-line bg-surface pl-3 pr-4 text-sm text-ink placeholder:text-faint transition-colors focus:border-brand focus:ring-2 focus:ring-brand/20 focus:outline-none"
           />
         </div>
-        <button
-          onClick={() => void load()}
-          className="glass-panel px-4 py-2 hover:bg-bg-surface/80 transition-colors flex items-center gap-2"
-          title="Refresh"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-        </button>
-      </motion.div>
+        <Button variant="outline" onClick={() => void load()} title="Refresh" aria-label="Refresh">
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+        </Button>
+      </div>
 
       {/* Table */}
-      <motion.div variants={itemVariants} className="glass-panel overflow-hidden">
-        <div className="overflow-x-auto">
-          {loading ? (
-            <div className="p-10 text-center text-text-secondary">Loading inventory…</div>
-          ) : filtered.length === 0 ? (
-            <div className="p-10 text-center text-text-secondary">
-              {query ? "No matches for that search." : "No stock expiring soon — all clear!"}
-            </div>
-          ) : (
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-border-default bg-slate-50">
-                  <th className="p-4 text-xs font-medium text-text-secondary uppercase tracking-wider">Product</th>
-                  <th className="p-4 text-xs font-medium text-text-secondary uppercase tracking-wider">Stock / Velocity</th>
-                  <th className="p-4 text-xs font-medium text-text-secondary uppercase tracking-wider">Expiry</th>
-                  <th className="p-4 text-xs font-medium text-text-secondary uppercase tracking-wider">Risk Value</th>
-                  <th className="p-4 text-xs font-medium text-text-secondary uppercase tracking-wider">Status</th>
-                  <th className="p-4"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border-default">
-                {filtered.map((item) => {
-                  const badge = STATUS_BADGE[item.product.status] ?? STATUS_BADGE.SAFE;
-                  return (
-                    <tr key={item.id} className="hover:bg-bg-surface/50 transition-colors">
-                      <td className="p-4">
-                        <div className="font-medium text-text-primary">{item.product.name}</div>
-                        <div className="text-xs text-text-muted">
-                          Batch: {item.batch.batchCode || "—"} · {item.product.sku || "No SKU"}
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div className="text-text-primary">{item.batch.qty} units</div>
-                        <div className="text-xs text-text-muted">{item.product.velocityPerDay.toFixed(1)}/day</div>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-text-secondary" />
-                          <span className={item.expiryDays <= 3 ? "text-red-400" : item.expiryDays <= 15 ? "text-orange-400" : "text-text-secondary"}>
-                            {item.expiryDays}d · {item.batch.expiryDate}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="p-4 font-medium text-text-primary">
-                        {item.riskValue ? formatINR(item.riskValue) : "—"}
-                      </td>
-                      <td className="p-4">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${badge.cls}`}>{badge.label}</span>
-                      </td>
-                      <td className="p-4 text-right">
-                        <Link href="/dashboard/actions" className="text-sm font-medium text-brand-green hover:text-brand-green/80 transition-colors">
-                          {item.aiKind ? "Action" : "View"}
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </motion.div>
+      <DataTable<InventoryItem>
+        columns={columns}
+        rows={filtered}
+        rowKey={(r) => r.id}
+        loading={loading}
+        emptyState={
+          <div className="py-8 text-center text-sm text-muted">
+            {query ? "No matches for that search." : "No stock expiring soon — all clear!"}
+          </div>
+        }
+        rowActions={(r) => (
+          <Link href="/dashboard/actions" className="text-sm font-medium text-brand hover:underline">
+            {r.aiKind ? "Action" : "View"}
+          </Link>
+        )}
+      />
 
       {/* Bottom hint */}
-      <motion.div variants={itemVariants} className="glass-panel p-4 flex items-start gap-3 text-sm text-text-secondary">
-        <PackageSearch className="w-4 h-4 text-brand-green shrink-0 mt-0.5" />
-        <p>
+      <Card className="flex items-start gap-3 p-4">
+        <PackageSearch className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
+        <p className="text-sm leading-relaxed text-dim">
           Showing stock expiring within 15 days. The AI detection engine rescans every few minutes —
           run a scan from the{" "}
-          <Link href="/dashboard/actions" className="text-brand-green font-medium hover:underline">AI Action Engine</Link>{" "}
+          <Link href="/dashboard/actions" className="font-medium text-brand hover:underline">AI Action Engine</Link>{" "}
           to refresh recommendations, and use{" "}
-          <Link href="/dashboard/scanner" className="text-brand-green font-medium hover:underline">Smart Receiving</Link>{" "}
+          <Link href="/dashboard/scanner" className="font-medium text-brand hover:underline">Smart Receiving</Link>{" "}
           to add new stock.
         </p>
-      </motion.div>
-    </motion.div>
+      </Card>
+    </div>
   );
 }

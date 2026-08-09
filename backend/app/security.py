@@ -43,3 +43,29 @@ def create_access_token(*, user_id: uuid.UUID, role: str, store_id: uuid.UUID | 
 def decode_token(token: str) -> dict[str, Any]:
     """Decode and validate a JWT. Raises jwt.PyJWTError on failure."""
     return jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+
+
+# --- RBAC Permissions ---
+ROLE_PERMISSIONS = {
+    "OWNER": {
+        "view:all", "edit:store", "manage:users", "manage:billing",
+        "view:inventory", "edit:inventory", "view:sales", "process:sale",
+        "view:reports", "view:ai_insights",
+    },
+    "MANAGER": {
+        "view:all", "edit:store",
+        "view:inventory", "edit:inventory", "view:sales", "process:sale",
+        "view:reports", "view:ai_insights",
+    },
+    "BILLER": {
+        "view:inventory", "view:sales", "process:sale",
+    },
+    "WORKER": {
+        "view:inventory", "edit:inventory",
+    }
+}
+
+def has_permission(role: str, permission: str) -> bool:
+    """Check if a given role has the requested permission."""
+    permissions = ROLE_PERMISSIONS.get(role, set())
+    return permission in permissions or "view:all" in permissions and permission.startswith("view:")

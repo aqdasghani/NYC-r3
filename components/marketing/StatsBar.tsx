@@ -7,28 +7,28 @@ import { Store, BarChart3, ShieldCheck, BrainCircuit, Droplet, Sparkles } from '
 const stats = [
   {
     icon: <Store className="w-6 h-6 text-brand-green" />,
-    value: "2,000+",
-    label: "Happy Stores"
+    value: "Operations",
+    label: "Physical Retail OS"
   },
   {
     icon: <BarChart3 className="w-6 h-6 text-brand-green" />,
-    value: "15Cr+",
-    label: "Inventory Tracked"
+    value: "Zero-LLM",
+    label: "Math Engine Grounding"
   },
   {
     icon: <ShieldCheck className="w-6 h-6 text-brand-green" />,
-    value: "₹120Cr+",
-    label: "Waste Prevented"
+    value: "FIFO & Expiry",
+    label: "Batch Waste Prevention"
   },
   {
     icon: <BrainCircuit className="w-6 h-6 text-brand-green" />,
-    value: "8 Modules",
-    label: "AI Agents"
+    value: "AI Action Center",
+    label: "Explainable Decisions"
   },
   {
     icon: <Droplet className="w-6 h-6 text-brand-green" />,
-    value: "99.5%",
-    label: "Reliability"
+    value: "Role Isolation",
+    label: "Owner / Worker / Biller"
   }
 ];
 
@@ -43,12 +43,12 @@ export function StatsBar() {
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
           className="bg-white rounded-3xl p-8 flex flex-col items-center gap-8 shadow-xl border border-slate-100 relative overflow-hidden"
         >
-          {/* Subtle glow background inside the bar */}
+          {/* Subtle background */}
           <div className="absolute inset-0 bg-gradient-to-b from-brand-green/5 to-transparent opacity-50" />
           
           <div className="relative z-10 text-center flex flex-col items-center gap-2">
              <div className="flex items-center gap-2 text-text-secondary font-medium">
-               Trusted by 2,000+ retailers and growing <Sparkles className="w-4 h-4 text-brand-green" />
+               Built specifically for intelligent physical retail operations <Sparkles className="w-4 h-4 text-brand-green" />
              </div>
           </div>
 
@@ -59,8 +59,8 @@ export function StatsBar() {
                   {stat.icon}
                 </div>
                 <div className="flex flex-col items-center text-center">
-                  <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{stat.value}</span>
-                  <span className="text-sm text-slate-500 font-semibold mt-1">{stat.label}</span>
+                  <span className="text-xl font-extrabold text-slate-900 tracking-tight">{stat.value}</span>
+                  <span className="text-xs text-slate-500 font-semibold mt-1">{stat.label}</span>
                 </div>
               </div>
             ))}

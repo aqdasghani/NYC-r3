@@ -1,253 +1,584 @@
 "use client";
 
-import React, { useState } from "react";
-import { 
-  Plus, Search, Edit2, Trash2, Barcode, X, Package, Check, 
-  MoreVertical, Filter, Download
-} from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Plus, Search, Barcode, X, Package, Check, RefreshCw, AlertCircle, CheckCircle2, ArrowRight, Sparkles, Clock, Tag } from "lucide-react";
+import { getProducts, createProduct, getProductByBarcode, confirmReceipt } from "@/lib/api";
+import { BarcodeScanner } from "@/components/scanner/BarcodeScanner";
+import type { ProductOut } from "@/lib/backend-types";
+import { Button, Card, CardHeader, DataTable, type Column, EmptyState, Field, Input, Select, Modal, KpiCard } from "@/components/ui";
 
-// Mock Data
-const MOCK_PRODUCTS = [
-  { id: "PRD-001", name: "Organic Green Tea", sku: "OGT-100", category: "Beverages", stock: 150, price: 450, status: "In Stock" },
-  { id: "PRD-002", name: "Vegan Protein Powder", sku: "VPP-500", category: "Supplements", stock: 12, price: 1200, status: "Low Stock" },
-  { id: "PRD-003", name: "Almond Milk 1L", sku: "ALM-1L", category: "Dairy Alternatives", stock: 0, price: 280, status: "Out of Stock" },
-  { id: "PRD-004", name: "Gluten-Free Oats", sku: "GFO-250", category: "Pantry", stock: 85, price: 150, status: "In Stock" },
-  { id: "PRD-005", name: "Cold Pressed Olive Oil", sku: "CPO-500", category: "Oils", stock: 34, price: 850, status: "In Stock" },
-];
+const STATUS_LABELS: Record<string, string> = {
+  CRITICAL: "Critical",
+  WARNING: "Warning",
+  UPCOMING: "Upcoming",
+  SAFE: "Safe",
+  DEAD_STOCK: "Dead Stock",
+  OVERSTOCK: "Overstock",
+};
 
 export default function ProductsPage() {
+  const [products, setProducts] = useState<ProductOut[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [barcodeInput, setBarcodeInput] = useState("");
+
+  // Scanned Product Result State
+  const [scannedResult, setScannedResult] = useState<{
+    code: string;
+    product?: ProductOut;
+    isNew: boolean;
+  } | null>(null);
+
+  const [scanMessage, setScanMessage] = useState<{ text: string; type: "success" | "error" | "info" } | null>(null);
+
+  // Scan Receiving & Quick Stock State
+  const [scanQty, setScanQty] = useState<number>(1);
+  const [scanReceivePrice, setScanReceivePrice] = useState<string>("0");
+  const [scanCellPrice, setScanCellPrice] = useState<string>("0");
+  const [scanTimestamp, setScanTimestamp] = useState<string>("");
+  const [isReceivingStock, setIsReceivingStock] = useState(false);
+  const [receiveSuccessMsg, setReceiveSuccessMsg] = useState<string | null>(null);
+
+  // Form State
+  const [newProductName, setNewProductName] = useState("");
+  const [newProductSku, setNewProductSku] = useState("");
+  const [newProductCategory, setNewProductCategory] = useState("Pantry");
+  const [newProductPrice, setNewProductPrice] = useState("");
+  const [newProductPurchasePrice, setNewProductPurchasePrice] = useState("");
+  const [newProductBarcode, setNewProductBarcode] = useState("");
+  const [newProductGst, setNewProductGst] = useState("5");
+  const [newProductUnit, setNewProductUnit] = useState("pkt");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const fetchProductsList = async (query?: string) => {
+    setLoading(true);
+    try {
+      const data = await getProducts(query);
+      setProducts(data);
+    } catch (err) {
+      console.error("Failed to fetch products list", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchProductsList(searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  const handleScanCode = async (code: string) => {
+    const cleanCode = code.trim();
+    if (!cleanCode) return;
+    setScanMessage({ text: `Scanning barcode ${cleanCode}...`, type: "info" });
+    setReceiveSuccessMsg(null);
+
+    const now = new Date();
+    const formattedDate = now.toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    });
+    setScanTimestamp(formattedDate);
+
+    try {
+      const prod = await getProductByBarcode(cleanCode);
+      setScannedResult({ code: cleanCode, product: prod, isNew: false });
+      setScanQty(1);
+      setScanReceivePrice(prod.purchase_price ? String(prod.purchase_price) : "0");
+      setScanCellPrice(prod.selling_price ? String(prod.selling_price) : "0");
+      setScanMessage({ text: `Barcode Matched: ${prod.name}`, type: "success" });
+    } catch {
+      setScannedResult({ code: cleanCode, isNew: true });
+      setScanQty(1);
+      setScanReceivePrice("0");
+      setScanCellPrice("0");
+      setScanMessage({ text: `New Barcode Detected: ${cleanCode}`, type: "info" });
+    }
+  };
+
+  const handleQuickReceive = async () => {
+    if (!scannedResult?.product) return;
+    setIsReceivingStock(true);
+    setReceiveSuccessMsg(null);
+    try {
+      const qty = Number(scanQty) || 1;
+      const receivePriceNum = Number(scanReceivePrice) || 0;
+      
+      const expiry = new Date(Date.now() + 180 * 86400000).toISOString().slice(0, 10);
+      await confirmReceipt([
+        {
+          product_id: scannedResult.product.id,
+          quantity: qty,
+          purchase_price: receivePriceNum,
+          expiry_date: expiry,
+          batch_number: `SCAN-${Date.now().toString().slice(-6)}`,
+        },
+      ]);
+      setReceiveSuccessMsg(`Successfully added ${qty} units of ${scannedResult.product.name} at ₹${receivePriceNum} (Scanned: ${scanTimestamp})`);
+      await fetchProductsList();
+    } catch (err) {
+      console.error("Failed to receive stock", err);
+    } finally {
+      setIsReceivingStock(false);
+    }
+  };
+
+  const handleCreateProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProductName.trim()) return;
+    setIsSaving(true);
+    try {
+      const created = await createProduct({
+        name: newProductName.trim(),
+        category: newProductCategory,
+        barcode: newProductBarcode.trim() || undefined,
+        selling_price: parseFloat(newProductPrice) || 0,
+        purchase_price: parseFloat(newProductPurchasePrice) || 0,
+        gst_rate: parseFloat(newProductGst) || 0,
+        sku: newProductSku.trim() || undefined,
+        unit: newProductUnit,
+      });
+
+      setProducts((prev) => [created, ...prev]);
+
+      // Reset form
+      setNewProductName("");
+      setNewProductSku("");
+      setNewProductBarcode("");
+      setNewProductPrice("");
+      setNewProductPurchasePrice("");
+      setNewProductUnit("pkt");
+      setIsAddModalOpen(false);
+      await fetchProductsList();
+    } catch (err) {
+      console.error("Failed to save new product", err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const columns: Column<ProductOut>[] = [
+    {
+      key: "name",
+      header: "Product Name",
+      sortValue: (r) => r.name,
+      render: (r) => (
+        <div>
+          <div className="font-medium text-ink">{r.name}</div>
+          <div className="text-xs text-muted font-mono">{r.id}</div>
+        </div>
+      ),
+    },
+    {
+      key: "barcode",
+      header: "Barcode",
+      sortValue: (r) => r.barcode || "",
+      render: (r) => (
+        r.barcode ? (
+          <span className="inline-flex items-center gap-1 font-mono text-ink bg-subtle px-2 py-0.5 rounded">
+            <Barcode className="w-3 h-3 text-muted" />
+            {r.barcode}
+          </span>
+        ) : (
+          <span className="text-muted">—</span>
+        )
+      ),
+    },
+    {
+      key: "sku",
+      header: "SKU",
+      sortValue: (r) => r.sku || "",
+      render: (r) => (
+        <span className="font-mono text-dim">{r.sku || "—"}</span>
+      ),
+    },
+    {
+      key: "category",
+      header: "Category",
+      sortValue: (r) => r.category || "",
+      render: (r) => (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-subtle text-dim text-[10px] font-medium">
+          {r.category || "General"}
+        </span>
+      ),
+    },
+    {
+      key: "selling_price",
+      header: "Selling Price (₹)",
+      align: "right",
+      sortValue: (r) => r.selling_price || 0,
+      render: (r) => (
+        <span className="font-mono font-medium text-ink text-right">
+          ₹{(r.selling_price || 0).toLocaleString("en-IN")}
+        </span>
+      ),
+    },
+    {
+      key: "purchase_price",
+      header: "Cost Price (₹)",
+      align: "right",
+      sortValue: (r) => r.purchase_price || 0,
+      render: (r) => (
+        <span className="font-mono text-dim text-right">
+          ₹{(r.purchase_price || 0).toLocaleString("en-IN")}
+        </span>
+      ),
+    },
+    {
+      key: "lead_time_days",
+      header: "Lead Time",
+      align: "right",
+      sortValue: (r) => r.lead_time_days || 0,
+      render: (r) => (
+        <span className="text-dim text-right">{r.lead_time_days || 2} Days</span>
+      ),
+    },
+  ];
 
   return (
-    <div className="space-y-6 pb-12 max-w-7xl mx-auto">
+    <div className="space-y-6 pb-12">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-line pb-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Package className="w-6 h-6 text-brand-green" />
-            Products
+          <h1 className="text-xl font-semibold tracking-tight text-ink flex items-center gap-2">
+            <Package className="w-5 h-5 text-brand" /> Products & Inventory Catalogue
           </h1>
-          <p className="text-sm text-slate-500 mt-1">Manage your inventory, pricing, and product details.</p>
+          <p className="text-xs text-muted">
+            Scan barcodes or register SKUs to manage prices, categories, and stock.
+          </p>
         </div>
         <div className="flex items-center gap-3">
-          <button 
-            onClick={() => setIsScannerOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-semibold border border-slate-200"
-          >
-            <Barcode className="w-4 h-4" />
-            Scan Barcode
-          </button>
-          <button 
-            onClick={() => setIsAddModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-brand-green text-white rounded-lg hover:bg-brand-green-dark transition-colors text-sm font-semibold shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            Add Product
-          </button>
+          <Button variant="outline" onClick={() => { setScannedResult(null); setScanMessage(null); setIsScannerOpen(true); }}>
+            <Barcode className="w-4 h-4 text-brand" /> Scan Barcode
+          </Button>
+          <Button onClick={() => { setNewProductBarcode(""); setIsAddModalOpen(true); }}>
+            <Plus className="w-4 h-4" /> Add Product
+          </Button>
         </div>
       </div>
 
       {/* Toolbar */}
-      <div className="glass-panel p-4 flex flex-col sm:flex-row gap-4 justify-between items-center">
+      <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
         <div className="relative w-full sm:w-96">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input 
-            type="text" 
-            placeholder="Search by name, SKU, or category..." 
-            className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-green focus:border-transparent transition-all"
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+          <Input
+            placeholder="Search by product name, barcode, or SKU..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9"
           />
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto">
-          <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white text-slate-700 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium border border-slate-200">
-            <Filter className="w-4 h-4" />
-            Filters
-          </button>
-          <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white text-slate-700 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium border border-slate-200">
-            <Download className="w-4 h-4" />
-            Export
-          </button>
+          <Button variant="outline" onClick={() => fetchProductsList(searchTerm)} title="Refresh" aria-label="Refresh">
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
         </div>
       </div>
 
       {/* Data Table */}
-      <div className="glass-panel overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600">
-              <tr>
-                <th className="px-6 py-4 font-semibold">Product Name</th>
-                <th className="px-6 py-4 font-semibold">SKU</th>
-                <th className="px-6 py-4 font-semibold">Category</th>
-                <th className="px-6 py-4 font-semibold text-right">Price (₹)</th>
-                <th className="px-6 py-4 font-semibold text-right">Stock</th>
-                <th className="px-6 py-4 font-semibold">Status</th>
-                <th className="px-6 py-4 font-semibold text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {MOCK_PRODUCTS.map((product) => (
-                <tr key={product.id} className="hover:bg-slate-50 transition-colors group">
-                  <td className="px-6 py-4">
-                    <div className="font-medium text-slate-900">{product.name}</div>
-                    <div className="text-xs text-slate-500">{product.id}</div>
-                  </td>
-                  <td className="px-6 py-4 text-slate-600">{product.sku}</td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center px-2 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-medium">
-                      {product.category}
+      <Card noPadding>
+        <DataTable<ProductOut>
+          columns={columns}
+          rows={products}
+          rowKey={(r) => r.id}
+          loading={loading}
+          emptyState={
+            <EmptyState
+              icon={<Package className="h-12 w-12 text-brand/50" />}
+              title="No products found"
+              description="Scan a barcode using your webcam or click Add Product to register inventory into the database."
+              action={
+                <Button onClick={() => setIsAddModalOpen(true)}>Add First Product</Button>
+              }
+            />
+          }
+        />
+      </Card>
+
+      {/* Add Product Modal */}
+      <Modal
+        open={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        title="Add New Product to Database"
+        size="lg"
+      >
+        <form onSubmit={handleCreateProduct} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <Field label="Product Name" required>
+                <Input
+                  value={newProductName}
+                  onChange={(e) => setNewProductName(e.target.value)}
+                  placeholder="e.g. Amul Taaza Milk 500ml"
+                  required
+                />
+              </Field>
+            </div>
+            <div>
+              <Field label="Barcode (EAN-13 / UPC)">
+                <Input
+                  value={newProductBarcode}
+                  onChange={(e) => setNewProductBarcode(e.target.value)}
+                  placeholder="e.g. 8901234567890"
+                />
+              </Field>
+            </div>
+            <div>
+              <Field label="SKU">
+                <Input
+                  value={newProductSku}
+                  onChange={(e) => setNewProductSku(e.target.value)}
+                  placeholder="e.g. AMUL-MILK-500"
+                />
+              </Field>
+            </div>
+            <div>
+              <Field label="Category">
+                <Input
+                  value={newProductCategory}
+                  onChange={(e) => setNewProductCategory(e.target.value)}
+                  placeholder="e.g. Dairy / Beverages"
+                />
+              </Field>
+            </div>
+            <div>
+              <Field label="Unit">
+                <Input
+                  value={newProductUnit}
+                  onChange={(e) => setNewProductUnit(e.target.value)}
+                  placeholder="e.g. pkt, box, kg"
+                />
+              </Field>
+            </div>
+            <div>
+              <Field label="GST Rate (%)">
+                <Input
+                  type="number"
+                  value={newProductGst}
+                  onChange={(e) => setNewProductGst(e.target.value)}
+                  placeholder="5"
+                />
+              </Field>
+            </div>
+            <div>
+              <Field label="Selling Price (₹)" required>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={newProductPrice}
+                  onChange={(e) => setNewProductPrice(e.target.value)}
+                  placeholder="0.00"
+                  required
+                />
+              </Field>
+            </div>
+            <div>
+              <Field label="Cost Price (₹)">
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={newProductPurchasePrice}
+                  onChange={(e) => setNewProductPurchasePrice(e.target.value)}
+                  placeholder="0.00"
+                />
+              </Field>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-line flex justify-end gap-3">
+            <Button variant="ghost" onClick={() => setIsAddModalOpen(false)}>Cancel</Button>
+            <Button type="submit" disabled={isSaving}>
+              {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : 'Save Product'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Real Barcode Scanner Modal (Camera & Real Decoder) */}
+      <Modal
+        open={isScannerOpen}
+        onClose={() => { setIsScannerOpen(false); setScanMessage(null); setScannedResult(null); setReceiveSuccessMsg(null); }}
+        title="Scan Product Barcode"
+        size="lg"
+      >
+        <div className="space-y-4">
+          {/* Scanner Feed Container */}
+          <div className="rounded-xl overflow-hidden border border-line bg-canvas">
+            <BarcodeScanner onScan={handleScanCode} />
+          </div>
+
+          {/* Scanned Result Action Card */}
+          {scannedResult ? (
+            <div className="rounded-xl border border-line bg-surface p-4 space-y-4 text-sm shadow-sm">
+              {scannedResult.product ? (
+                <div className="space-y-3">
+                  {/* Status Banner */}
+                  <div className="flex items-center justify-between text-success font-medium">
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Product Found in Database
                     </span>
-                  </td>
-                  <td className="px-6 py-4 text-right font-medium text-slate-900">
-                    {product.price.toLocaleString('en-IN')}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <span className={`font-medium ${product.stock < 20 ? (product.stock === 0 ? 'text-red-500' : 'text-orange-500') : 'text-slate-700'}`}>
-                      {product.stock}
+                    <span className="font-mono bg-canvas px-2.5 py-1 rounded border border-line text-xs font-bold text-ink">
+                      {scannedResult.code}
                     </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
-                      product.status === 'In Stock' ? 'bg-green-100 text-green-700' :
-                      product.status === 'Low Stock' ? 'bg-orange-100 text-orange-700' :
-                      'bg-red-100 text-red-700'
-                    }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${
-                        product.status === 'In Stock' ? 'bg-green-500' :
-                        product.status === 'Low Stock' ? 'bg-orange-500' :
-                        'bg-red-500'
-                      }`}></span>
-                      {product.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button className="p-1.5 text-slate-400 hover:text-brand-blue hover:bg-blue-50 rounded-md transition-colors">
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                      <button className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors">
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
+                  </div>
+
+                  {/* Product Details Header */}
+                  <div className="bg-subtle p-3 rounded-lg border border-line-subtle space-y-1">
+                    <div className="font-bold text-base text-brand">{scannedResult.product.name}</div>
+                    <div className="text-xs text-muted">
+                      Category: <strong className="text-dim">{scannedResult.product.category || "General"}</strong>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
-          <div className="text-xs text-slate-500">Showing 1 to 5 of 5 entries</div>
-          <div className="flex items-center gap-2">
-            <button className="px-3 py-1 bg-white border border-slate-200 rounded text-xs font-medium text-slate-400 cursor-not-allowed">Previous</button>
-            <button className="px-3 py-1 bg-white border border-slate-200 rounded text-xs font-medium text-slate-700 hover:bg-slate-50">Next</button>
-          </div>
-        </div>
-      </div>
+                  </div>
 
-      {/* Add Product Modal (Mock) */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="text-lg font-bold text-slate-800">Add New Product</h3>
-              <button 
-                onClick={() => setIsAddModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Product Name</label>
-                  <input type="text" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-green" placeholder="e.g. Premium Arabica Coffee" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">SKU</label>
-                  <input type="text" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-green" placeholder="e.g. COF-001" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Category</label>
-                  <select className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-green">
-                    <option>Beverages</option>
-                    <option>Pantry</option>
-                    <option>Supplements</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Price (₹)</label>
-                  <input type="number" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-green" placeholder="0.00" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Initial Stock</label>
-                  <input type="number" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-green" placeholder="0" />
-                </div>
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50">
-              <button 
-                onClick={() => setIsAddModalOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={() => setIsAddModalOpen(false)}
-                className="px-4 py-2 bg-brand-green text-white rounded-lg hover:bg-brand-green-dark transition-colors text-sm font-semibold shadow-sm flex items-center gap-2"
-              >
-                <Check className="w-4 h-4" />
-                Save Product
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+                  {/* Auto-Placed Date & Time Badge */}
+                  <div className="flex items-center justify-between bg-slate-50 border border-slate-200 p-2.5 rounded-lg text-xs">
+                    <span className="flex items-center gap-1.5 text-slate-600 font-semibold">
+                      <Clock className="w-4 h-4 text-brand" /> Auto Date & Time:
+                    </span>
+                    <span className="font-mono font-bold text-brand-green-dark bg-white px-2.5 py-1 rounded border border-slate-300">
+                      {scanTimestamp}
+                    </span>
+                  </div>
 
-      {/* Barcode Scanner Modal (Mock) */}
-      {isScannerOpen && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 flex justify-between items-center absolute w-full top-0 z-10">
-              <h3 className="text-white font-bold drop-shadow-md">Scan Barcode</h3>
-              <button 
-                onClick={() => setIsScannerOpen(false)}
-                className="p-1.5 text-white hover:bg-white/20 rounded-full transition-colors backdrop-blur-md"
-              >
-                <X className="w-5 h-5" />
-              </button>
+                  {/* Details Grid: Quantity, Price of Receive, Price of Cell */}
+                  <div className="grid grid-cols-3 gap-3 bg-canvas p-3 rounded-lg border border-line">
+                    <div>
+                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-1">
+                        Quantity
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={scanQty}
+                        onChange={(e) => setScanQty(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-full text-sm font-bold font-mono px-2.5 py-1.5 border border-line rounded bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-brand/40"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-1">
+                        Price of Receive (₹)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={scanReceivePrice}
+                        onChange={(e) => setScanReceivePrice(e.target.value)}
+                        className="w-full text-sm font-bold font-mono px-2.5 py-1.5 border border-line rounded bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-brand/40"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-muted uppercase tracking-wider mb-1">
+                        Price of Cell (₹)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={scanCellPrice}
+                        onChange={(e) => setScanCellPrice(e.target.value)}
+                        className="w-full text-sm font-bold font-mono px-2.5 py-1.5 border border-line rounded bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-brand/40"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Success Banner */}
+                  {receiveSuccessMsg && (
+                    <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                      <span>{receiveSuccessMsg}</span>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      onClick={handleQuickReceive}
+                      disabled={isReceivingStock}
+                      className="flex-1 bg-brand-green hover:bg-brand-green-dark text-white font-bold"
+                    >
+                      {isReceivingStock ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4" />
+                      )}
+                      Confirm & Add Stock
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => { setSearchTerm(scannedResult.code); setIsScannerOpen(false); }}
+                    >
+                      Highlight in Catalog <ArrowRight className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-info font-medium">
+                    <span className="flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-brand" /> New Barcode Detected
+                    </span>
+                    <span className="font-mono bg-info-soft px-2 py-0.5 rounded border border-info/20 text-xs">
+                      {scannedResult.code}
+                    </span>
+                  </div>
+
+                  {/* Auto-Placed Date & Time Badge */}
+                  <div className="flex items-center justify-between bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs">
+                    <span className="flex items-center gap-1.5 text-slate-600 font-semibold">
+                      <Clock className="w-4 h-4 text-brand" /> Auto Date & Time:
+                    </span>
+                    <span className="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-300">
+                      {scanTimestamp}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-muted">
+                    Barcode <strong>{scannedResult.code}</strong> is not registered in your store catalogue yet.
+                  </p>
+                  <Button
+                    onClick={() => { setIsScannerOpen(false); setNewProductBarcode(scannedResult.code); setIsAddModalOpen(true); }}
+                    className="w-full"
+                  >
+                    Register New Product Now <Plus className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              )}
             </div>
-            <div className="relative aspect-square bg-slate-900 flex items-center justify-center overflow-hidden">
-              {/* Mock camera feed */}
-              <div className="absolute inset-0 opacity-20 bg-[url('https://images.unsplash.com/photo-1607344645866-009c320b63e0?auto=format&fit=crop&q=80&w=800')] bg-cover bg-center"></div>
-              
-              {/* Scanning UI overlay */}
-              <div className="relative z-10 w-64 h-64 border-2 border-brand-green/50 rounded-xl flex items-center justify-center">
-                <div className="absolute w-full h-0.5 bg-brand-green top-1/2 -translate-y-1/2 shadow-[0_0_10px_#0FA958] animate-pulse"></div>
-                
-                {/* Corner markers */}
-                <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-brand-green rounded-tl"></div>
-                <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-brand-green rounded-tr"></div>
-                <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-brand-green rounded-bl"></div>
-                <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-brand-green rounded-br"></div>
-              </div>
+          ) : scanMessage ? (
+            <div className={`rounded-lg p-3 text-center text-xs font-medium border ${
+              scanMessage.type === "success"
+                ? "bg-success-soft text-success border-success/30"
+                : "bg-info-soft text-info border-info/30"
+            }`}>
+              {scanMessage.text}
             </div>
-            <div className="p-6 bg-white text-center">
-              <p className="text-sm text-slate-600 mb-4">Position the barcode inside the frame to scan automatically.</p>
-              <div className="inline-flex items-center justify-center gap-2 text-xs font-semibold text-brand-green bg-green-50 py-2 px-4 rounded-lg">
-                <div className="w-2 h-2 rounded-full bg-brand-green animate-ping"></div>
-                Camera Active
-              </div>
+          ) : null}
+
+          {/* Manual Barcode Input Fallback */}
+          <div className="border-t border-line pt-4 space-y-2 text-sm">
+            <p className="font-medium text-muted">Or Type Barcode Number Manually:</p>
+            <div className="flex gap-2">
+              <Input
+                type="text"
+                placeholder="e.g. 8901030940387"
+                value={barcodeInput}
+                onChange={(e) => setBarcodeInput(e.target.value)}
+                className="flex-1 font-mono"
+              />
+              <Button onClick={() => handleScanCode(barcodeInput)}>Lookup</Button>
             </div>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }

@@ -83,6 +83,7 @@ def test_briefing_endpoint(client, owner_headers):
     assert len(body["sections"]) == 4
 
 
-def test_staff_can_read_dashboard(client, staff_headers):
+def test_staff_cannot_read_dashboard(client, staff_headers):
+    # RBAC (B4): financial dashboard is OWNER/MANAGER-only. Workers never see it.
     r = client.get("/api/analytics/dashboard", headers=staff_headers)
-    assert r.status_code == 200
+    assert r.status_code == 403

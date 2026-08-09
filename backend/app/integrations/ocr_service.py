@@ -78,7 +78,7 @@ def extract_invoice_text(image_bytes: bytes) -> OcrResult:
 
     # Fallback to dummy data if Gemini fails or is not configured
     if not parsed_items:
-        source = "mock"
+        source = "mock_parser"
         text = "MOCK INVOICE TEXT"
         parsed_items = [
             {
@@ -88,6 +88,22 @@ def extract_invoice_text(image_bytes: bytes) -> OcrResult:
                 "price": 50.0,
                 "batch_number": "B2284",
                 "expiry_date": "2026-08-11"
+            },
+            {
+                "line_text": "Mother Dairy Curd 400g 40 20.00",
+                "product_name": "Mother Dairy Curd 400g",
+                "quantity": 40,
+                "price": 20.0,
+                "batch_number": "B2213",
+                "expiry_date": "2026-08-10"
+            },
+            {
+                "line_text": "Britannia Bread 400g 30 25.00",
+                "product_name": "Britannia Bread 400g",
+                "quantity": 30,
+                "price": 25.0,
+                "batch_number": "B2187",
+                "expiry_date": "2026-08-14"
             }
         ]
 

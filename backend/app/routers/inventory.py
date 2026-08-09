@@ -12,10 +12,21 @@ from sqlalchemy import func, or_, select
 from ..deps import get_current_user, get_db, get_owner, get_owner_manager
 from ..engines.expiry_engine import classify_batch, expiry_timeline, get_at_risk_batches, stock_health
 from ..engines.forecast_engine import calculate_velocity, days_of_supply, reorder_quantity, stockout_eta
-from ..models.database import InventoryBatch, Product, Supplier, User
+from ..models.database import (
+    InventoryBatch,
+    InventoryTransaction,
+    Product,
+    PurchaseOrderItem,
+    Return,
+    Sale,
+    StockTransfer,
+    Supplier,
+    User,
+)
 from ..models.schemas import (
     AtRiskItem, BatchCreate, BatchOut, DeadStockItem, ExpiryTimelineBucket, MessageOut,
     Page, ProductCreate, ProductDetailOut, ProductOut, ProductUpdate, ReorderSuggestion, StockHealthSegment,
+    TransactionOut,
 )
 from ..integrations.barcode_service import lookup_barcode
 
@@ -58,7 +69,7 @@ def create_product(payload: ProductCreate, user: User = Depends(get_owner_manage
 def get_product(product_id: uuid.UUID, user: User = Depends(get_current_user), db=Depends(get_db)):
     product = db.scalar(select(Product).where(Product.id == product_id, Product.store_id == _store(user)))
     if not product: raise HTTPException(404, "Product not found")
-    batches = db.scalars(select(InventoryBatch).where(InventoryBatch.product_id == product.id)).all()
+    batches = db.scalars(select(InventoryBatch).where(InventoryBatch.product_id == product.id, InventoryBatch.store_id == _store(user))).all()
     result = ProductOut.model_validate(product).model_dump()
     result.update(total_stock=sum(b.quantity for b in batches), batches=[_batch_out(b) for b in batches])
     return ProductDetailOut.model_validate(result)
@@ -88,6 +99,21 @@ def update_product(product_id: uuid.UUID, payload: ProductUpdate, user: User = D
 def delete_product(product_id: uuid.UUID, user: User = Depends(get_owner), db=Depends(get_db)):
     product = db.scalar(select(Product).where(Product.id == product_id, Product.store_id == _store(user)))
     if not product: raise HTTPException(404, "Product not found")
+    # SQLite doesn't enforce foreign keys here, so a bare delete would orphan
+    # batches/sales/ledger rows and silently corrupt stock history. Refuse while
+    # dependent records exist — the caller must clear them (or the data stays).
+    dependents = {
+        "batches": db.scalar(select(func.count()).select_from(InventoryBatch).where(InventoryBatch.product_id == product.id)) or 0,
+        "sales": db.scalar(select(func.count()).select_from(Sale).where(Sale.product_id == product.id)) or 0,
+        "transactions": db.scalar(select(func.count()).select_from(InventoryTransaction).where(InventoryTransaction.product_id == product.id)) or 0,
+        "purchase order lines": db.scalar(select(func.count()).select_from(PurchaseOrderItem).where(PurchaseOrderItem.product_id == product.id)) or 0,
+        "transfers": db.scalar(select(func.count()).select_from(StockTransfer).where(StockTransfer.product_id == product.id)) or 0,
+        "returns": db.scalar(select(func.count()).select_from(Return).where(Return.product_id == product.id)) or 0,
+    }
+    active = {k: v for k, v in dependents.items() if v}
+    if active:
+        detail = ", ".join(f"{v} {k}" for k, v in active.items())
+        raise HTTPException(409, f"Cannot delete product: it has {detail}. Clear these records first.")
     db.delete(product); db.commit(); return MessageOut(message="Product deleted")
 
 
@@ -116,6 +142,8 @@ def at_risk(tier: str | None = None, user: User = Depends(get_current_user), db=
         severity = classify_batch(batch)["severity"]
         if tier and severity != tier: continue
         product = db.get(Product, batch.product_id)
+        if product is None:
+            continue  # orphaned batch (product deleted) — nothing actionable to report
         velocity = calculate_velocity(db, batch.store_id, batch.product_id)
         output.append(AtRiskItem(batch_id=batch.id, product_id=batch.product_id, product_name=product.name,
                                  batch_number=batch.batch_number, quantity=batch.quantity, expiry_date=batch.expiry_date,
@@ -140,7 +168,10 @@ def dead_stock(user: User = Depends(get_owner_manager), db=Depends(get_db)):
     for b in rows:
         days_idle=(date.today()-(b.last_sale_date or b.received_date)).days
         if days_idle > 60:
-            p=db.get(Product,b.product_id); result.append(DeadStockItem(batch_id=b.id,product_id=p.id,product_name=p.name,batch_number=b.batch_number,quantity=b.quantity,days_idle=days_idle,value_locked=float(b.quantity*(b.purchase_price or 0))))
+            p=db.get(Product,b.product_id)
+            if p is None:
+                continue  # orphaned batch (product deleted) — nothing to report on
+            result.append(DeadStockItem(batch_id=b.id,product_id=p.id,product_name=p.name,batch_number=b.batch_number,quantity=b.quantity,days_idle=days_idle,value_locked=float(b.quantity*(b.purchase_price or 0))))
     return result
 
 
@@ -150,5 +181,32 @@ def reorder_suggestions(user: User = Depends(get_owner_manager), db=Depends(get_
     for p in products:
         batches=db.scalars(select(InventoryBatch).where(InventoryBatch.product_id==p.id,InventoryBatch.quantity>0)).all(); qty=sum(b.quantity for b in batches); velocity=calculate_velocity(db,store_id,p.id); eta=stockout_eta(qty,velocity)
         if eta <= max(7,p.lead_time_days+2) or qty == 0:
-            result.append(ReorderSuggestion(product_id=p.id,name=p.name,current_qty=qty,velocity=velocity,lead_time_days=p.lead_time_days,suggested_qty=reorder_quantity(qty,velocity,p.lead_time_days),stockout_eta=eta if math.isfinite(eta) else None))
+            suggested_qty = reorder_quantity(qty, velocity, p.lead_time_days)
+            if suggested_qty <= 0:
+                continue  # no demand history → nothing worth ordering
+            result.append(ReorderSuggestion(product_id=p.id,name=p.name,current_qty=qty,velocity=velocity,lead_time_days=p.lead_time_days,suggested_qty=suggested_qty,stockout_eta=eta if math.isfinite(eta) else None))
     return result
+
+
+@router.get("/transactions", response_model=list[TransactionOut])
+def list_transactions(tx_type: str | None = None, product_id: uuid.UUID | None = None,
+                       limit: int = Query(100, le=500), offset: int = 0,
+                       user: User = Depends(get_current_user), db=Depends(get_db)):
+    """Auditable inventory ledger — every stock movement, newest first."""
+    store_id = _store(user)
+    q = select(InventoryTransaction).where(InventoryTransaction.store_id == store_id)
+    if tx_type:
+        q = q.where(InventoryTransaction.tx_type == tx_type)
+    if product_id:
+        q = q.where(InventoryTransaction.product_id == product_id)
+    q = q.order_by(InventoryTransaction.created_at.desc()).limit(limit).offset(offset)
+    rows = db.scalars(q).all()
+    out = []
+    for t in rows:
+        product = db.get(Product, t.product_id)
+        out.append(TransactionOut(
+            id=t.id, product_id=t.product_id, product_name=product.name if product else None,
+            batch_id=t.batch_id, tx_type=t.tx_type, quantity=t.quantity, note=t.note,
+            performed_by=t.performed_by, created_at=t.created_at,
+        ))
+    return out
