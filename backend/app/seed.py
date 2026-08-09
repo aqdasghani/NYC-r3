@@ -333,7 +333,9 @@ def _run_seed(db: Session) -> dict:
         # Spread each product's sales across the full 30-day window so the
         # prior-4-week baseline is populated (sparse last-week-only sales would
         # otherwise trip a false Demand Spike).
-        if product is lays or product is parle:
+        # Low-stock and overstock products sell every day — that real velocity
+        # is what makes their Stockout / Overstock detections genuine.
+        if product is lays or product is parle or product in overstock_products or product in low_stock_products:
             offsets = list(range(30))
         else:
             offsets = sorted(rng.sample(range(30), rng.randint(3, 8)))
@@ -342,6 +344,10 @@ def _run_seed(db: Session) -> dict:
                 qty = rng.randint(11, 15) if offset <= 6 else rng.randint(7, 10)
             elif product is parle:
                 qty = rng.randint(6, 10)
+            elif product in overstock_products:
+                qty = rng.randint(1, 4)
+            elif product in low_stock_products:
+                qty = rng.randint(1, 3)
             else:
                 qty = rng.randint(1, 8)
             sale_rows.append(Sale(
