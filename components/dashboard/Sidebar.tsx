@@ -1,100 +1,105 @@
 "use client";
 
-import React from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Package, PackageSearch, TrendingUp, ShoppingCart, Users, ArrowRightLeft, CornerDownLeft, Zap, FileText, Leaf, Bell, MessageCircle, Settings, ChevronRight } from 'lucide-react';
-import { motion } from 'framer-motion';
+import React from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Leaf } from "lucide-react";
+import { NAV_SECTIONS, type NavLink } from "./NavItems";
+import { GreenScoreWidget } from "./GreenScoreWidget";
 
-const navItems = [
-  { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-  { name: 'Products', path: '/dashboard/products', icon: PackageSearch },
-  { name: 'Inventory', path: '/dashboard/inventory', icon: Package },
-  { name: 'Sales & POS', path: '/dashboard/sales', icon: TrendingUp },
-  { name: 'Purchases', path: '/dashboard/purchases', icon: ShoppingCart },
-  { name: 'Suppliers', path: '/dashboard/suppliers', icon: Users },
-  { name: 'Transfers', path: '/dashboard/transfers', icon: ArrowRightLeft },
-  { name: 'Returns', path: '/dashboard/returns', icon: CornerDownLeft },
-  { name: 'AI Intelligence', path: '/dashboard/ai-intelligence', icon: Zap },
-  { name: 'Reports', path: '/dashboard/reports', icon: FileText },
-  { name: 'Sustainability', path: '/dashboard/sustainability', icon: Leaf },
-  { name: 'Alerts', path: '/dashboard/alerts', icon: Bell, badge: 5 },
-  { name: 'WhatsApp Hub', path: '/dashboard/whatsapp', icon: MessageCircle },
-  { name: 'Settings', path: '/settings', icon: Settings },
-];
+interface SidebarProps {
+  /** Mobile drawer open state (desktop sidebar is always visible). */
+  open?: boolean;
+  onClose?: () => void;
+}
 
-export function Sidebar() {
-  const pathname = usePathname();
-
+function NavLinkRow({ link, active }: { link: NavLink; active: boolean }) {
   return (
-    <div className="w-[260px] h-screen bg-[#063120] border-r border-[#0A412A] flex flex-col pt-6 pb-4 overflow-y-auto overflow-x-hidden" style={{ scrollbarWidth: 'none' }}>
-      <div className="px-5 mb-8 flex flex-col gap-1">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-[#0FA958] flex items-center justify-center shadow-[0_0_15px_rgba(15,169,88,0.5)]">
-            <Leaf className="w-5 h-5 text-white" />
-          </div>
-          <span className="font-bold text-xl text-white tracking-tight">GreenShop AI</span>
+    <Link href={link.path} className="block">
+      <div
+        className={`group flex items-center justify-between rounded-lg px-3 py-2.5 transition-all duration-200 ${
+          active ? "bg-[#0FA958]" : "hover:bg-white/5"
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <link.icon className={`h-4 w-4 ${active ? "text-white" : "text-slate-400 group-hover:text-white"}`} />
+          <span className={`text-sm font-medium ${active ? "text-white" : "text-slate-300 group-hover:text-white"}`}>{link.name}</span>
         </div>
-        <span className="text-[10px] text-[#0FA958] font-medium ml-10">Smart Retail. Zero Waste.</span>
+        {link.badge ? (
+          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">{link.badge}</div>
+        ) : (
+          <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-white/80" : "bg-transparent"}`} />
+        )}
+      </div>
+    </Link>
+  );
+}
+
+/** Shared sidebar content: logo, sectioned nav, green-score widget, footer. */
+function SidebarInner({ onDismiss }: { onDismiss?: () => void }) {
+  const pathname = usePathname();
+  return (
+    <>
+      <div className="mb-6 px-5">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0FA958] shadow-[0_0_15px_rgba(15,169,88,0.5)]">
+            <Leaf className="h-5 w-5 text-white" />
+          </div>
+          <span className="text-xl font-bold tracking-tight text-white">GreenShop AI</span>
+        </div>
+        <span className="ml-10 text-[10px] font-medium text-[#0FA958]">Smart Retail. Zero Waste.</span>
       </div>
 
-      <nav className="flex-1 px-3 space-y-1">
-        {navItems.map((item) => {
-          const isActive = pathname === item.path;
-          return (
-            <Link key={item.path} href={item.path}>
-              <div className={`flex items-center justify-between px-3 py-2.5 rounded-lg transition-all duration-200 group ${isActive ? 'bg-[#0FA958]' : 'hover:bg-white/5'}`}>
-                <div className="flex items-center gap-3">
-                  <item.icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'}`} />
-                  <span className={`text-sm font-medium ${isActive ? 'text-white' : 'text-slate-300 group-hover:text-white'}`}>
-                    {item.name}
-                  </span>
+      <nav className="flex-1 space-y-5 overflow-y-auto px-3" style={{ scrollbarWidth: "none" }}>
+        {NAV_SECTIONS.map((section) => (
+          <div key={section.title ?? "links"}>
+            {section.title && (
+              <div className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{section.title}</div>
+            )}
+            <div className="space-y-1">
+              {section.links?.map((link) => (
+                <NavLinkRow key={link.path} link={link} active={pathname === link.path} />
+              ))}
+              {section.soon?.map((name) => (
+                <div key={name} className="flex cursor-not-allowed items-center justify-between rounded-lg px-3 py-2.5 opacity-50">
+                  <span className="text-sm font-medium text-slate-300">{name}</span>
+                  <span className="rounded border border-slate-600 px-1.5 py-0.5 text-[9px] font-semibold text-slate-400">Soon</span>
                 </div>
-                {item.badge && (
-                  <div className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
-                    {item.badge}
-                  </div>
-                )}
-                {!item.badge && (
-                  <ChevronRight className={`w-3.5 h-3.5 ${isActive ? 'text-white/70' : 'text-slate-500 opacity-0 group-hover:opacity-100'} transition-opacity`} />
-                )}
-              </div>
-            </Link>
-          );
-        })}
+              ))}
+            </div>
+          </div>
+        ))}
       </nav>
 
-      {/* Green Score Widget */}
-      <div className="px-4 mt-8">
-        <div className="bg-[#042417] rounded-xl p-4 border border-[#0A412A] relative overflow-hidden">
-          <div className="flex justify-between items-center mb-4">
-            <span className="text-sm font-medium text-white">Green Score</span>
-            <span className="text-slate-500 text-xs">✕</span>
-          </div>
-          
-          <div className="relative flex justify-center items-center py-2">
-            {/* Simple CSS-based gauge using SVG */}
-            <svg viewBox="0 0 100 50" className="w-32 h-16 overflow-visible">
-              <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#0A412A" strokeWidth="8" strokeLinecap="round" />
-              <path d="M 10 50 A 40 40 0 0 1 75 25" fill="none" stroke="#0FA958" strokeWidth="8" strokeLinecap="round" style={{ strokeDasharray: '125', strokeDashoffset: '0', filter: 'drop-shadow(0 0 4px rgba(15,169,88,0.6))' }} />
-            </svg>
-            <div className="absolute bottom-0 text-center flex flex-col items-center">
-              <div className="text-2xl font-bold text-white leading-none">84<span className="text-sm text-slate-400 font-normal">/100</span></div>
-            </div>
-            {/* Leaf indicator */}
-            <div className="absolute bottom-1 bg-[#0FA958] p-1 rounded-full shadow-[0_0_10px_rgba(15,169,88,0.8)] border-2 border-[#042417]" style={{ transform: 'rotate(25deg) translateY(-25px)' }}>
-              <Leaf className="w-3 h-3 text-white" />
-            </div>
-          </div>
-          
-          <div className="mt-4 text-center">
-            <div className="text-[10px] font-semibold text-[#0FA958] flex items-center justify-center gap-1">
-              <span>↑ 7 this month</span>
-            </div>
-            <div className="text-xs text-slate-300 mt-1">Great Progress!</div>
-          </div>
+      <div className="mt-6 px-4">
+        <GreenScoreWidget onDismiss={onDismiss} />
+      </div>
+      <div className="px-5 pb-2 pt-4 text-[10px] text-slate-600">GreenShop AI · v0.1.0</div>
+    </>
+  );
+}
+
+export function Sidebar({ open = false, onClose }: SidebarProps) {
+  return (
+    <>
+      {/* Desktop — always visible ≥ lg */}
+      <aside className="hidden h-screen w-[260px] shrink-0 flex-col overflow-y-auto overflow-x-hidden border-r border-[#0A412A] bg-[#063120] pt-6 lg:flex" style={{ scrollbarWidth: "none" }}>
+        <SidebarInner />
+      </aside>
+
+      {/* Mobile drawer — slides in over content */}
+      <div className={`fixed inset-0 z-50 lg:hidden ${open ? "" : "pointer-events-none"}`} aria-hidden={!open}>
+        <div
+          className={`absolute inset-0 bg-black/50 transition-opacity duration-300 ${open ? "opacity-100" : "opacity-0"}`}
+          onClick={onClose}
+        />
+        <div
+          className={`absolute left-0 top-0 flex h-full w-[280px] flex-col overflow-y-auto bg-[#063120] pt-6 shadow-2xl transition-transform duration-300 ${open ? "translate-x-0" : "-translate-x-full"}`}
+          style={{ scrollbarWidth: "none" }}
+        >
+          <SidebarInner onDismiss={onClose} />
         </div>
       </div>
-    </div>
+    </>
   );
 }

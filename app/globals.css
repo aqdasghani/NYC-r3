@@ -81,6 +81,24 @@
   .premium-shadow {
     box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
   }
+
+  .input-field {
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    background-color: var(--bg-surface);
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .input-field:focus {
+    border-color: var(--brand-green);
+    box-shadow: 0 0 0 3px rgba(15, 169, 88, 0.15);
+  }
+  .input-field::placeholder {
+    color: var(--text-muted);
+  }
 }
 
 ::-webkit-scrollbar {
