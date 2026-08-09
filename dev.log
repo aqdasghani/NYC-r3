@@ -1,0 +1,142 @@
+
+> greenshop-ai@0.1.0 dev
+> next dev
+
+▲ Next.js 16.3.0 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.56.1:3000
+✓ Ready in 7.5s
+⚠ Warning: Next.js ignored package-lock.json in D:\ because it is outside the current Git repository (D:\riund 3 nyc\NYC-r3).
+ To use this directory, set `turbopack.root` in your Next.js config.
+
+✓ Running next.config.ts took 159ms
+
+○ Compiling / ...
+ GET / 200 in 20.3s (next.js: 19.4s, application-code: 845ms)
+ GET / 200 in 235ms (next.js: 29ms, application-code: 206ms)
+ GET / 200 in 221ms (next.js: 12ms, application-code: 209ms)
+⨯ TypeError: Cannot read properties of undefined (reading 'title')
+    at TopBar (components\layout\TopBar.tsx:61:86)
+  59 |           ) : (
+  60 |             <>
+> 61 |               <h1 className="truncate font-heading text-xl font-bold text-ink">{meta.title}</h1>
+     |                                                                                      ^
+  62 |               <p className="truncate text-sm text-muted">{meta.subtitle}</p>
+  63 |             </>
+  64 |           )} {
+  digest: '1599236333'
+}
+ GET /manifest.webmanifest 500 in 1234ms (next.js: 978ms, application-code: 256ms)
+✓ Compiled in 415ms
+ GET / 200 in 37ms (next.js: 18ms, application-code: 20ms)
+ GET / 200 in 198ms (next.js: 17ms, application-code: 180ms)
+ GET /inventory 404 in 54ms (next.js: 19ms, application-code: 35ms)
+ GET /inventory 404 in 148ms (next.js: 23ms, application-code: 125ms)
+⨯ TypeError: Cannot read properties of undefined (reading 'title')
+    at TopBar (components\layout\TopBar.tsx:61:86)
+  59 |           ) : (
+  60 |             <>
+> 61 |               <h1 className="truncate font-heading text-xl font-bold text-ink">{meta.title}</h1>
+     |                                                                                      ^
+  62 |               <p className="truncate text-sm text-muted">{meta.subtitle}</p>
+  63 |             </>
+  64 |           )} {
+  digest: '1599236333'
+}
+ GET /manifest.webmanifest 500 in 208ms (next.js: 33ms, application-code: 175ms)
+ GET /receiving 404 in 44ms (next.js: 23ms, application-code: 22ms)
+ GET /receiving 404 in 127ms (next.js: 21ms, application-code: 106ms)
+⨯ TypeError: Cannot read properties of undefined (reading 'title')
+    at TopBar (components\layout\TopBar.tsx:61:86)
+  59 |           ) : (
+  60 |             <>
+> 61 |               <h1 className="truncate font-heading text-xl font-bold text-ink">{meta.title}</h1>
+     |                                                                                      ^
+  62 |               <p className="truncate text-sm text-muted">{meta.subtitle}</p>
+  63 |             </>
+  64 |           )} {
+  digest: '1599236333'
+}
+ GET /manifest.webmanifest 500 in 233ms (next.js: 31ms, application-code: 202ms)
+ GET / 200 in 187ms (next.js: 19ms, application-code: 167ms)
+✓ Compiled in 123ms
+ GET /actions 404 in 54ms (next.js: 17ms, application-code: 36ms)
+ GET /actions 404 in 142ms (next.js: 19ms, application-code: 122ms)
+⨯ TypeError: Cannot read properties of undefined (reading 'title')
+    at TopBar (components\layout\TopBar.tsx:61:86)
+  59 |           ) : (
+  60 |             <>
+> 61 |               <h1 className="truncate font-heading text-xl font-bold text-ink">{meta.title}</h1>
+     |                                                                                      ^
+  62 |               <p className="truncate text-sm text-muted">{meta.subtitle}</p>
+  63 |             </>
+  64 |           )} {
+  digest: '1599236333'
+}
+ GET /manifest.webmanifest 500 in 212ms (next.js: 26ms, application-code: 186ms)
+ GET / 200 in 192ms (next.js: 14ms, application-code: 178ms)
+✓ Compiled in 161ms
+ GET / 200 in 191ms (next.js: 16ms, application-code: 175ms)
+ GET /inventory 404 in 42ms (next.js: 14ms, application-code: 28ms)
+ GET /inventory 404 in 81ms (next.js: 15ms, application-code: 66ms)
+⨯ TypeError: Cannot read properties of undefined (reading 'title')
+    at TopBar (components\layout\TopBar.tsx:61:86)
+  59 |           ) : (
+  60 |             <>
+> 61 |               <h1 className="truncate font-heading text-xl font-bold text-ink">{meta.title}</h1>
+     |                                                                                      ^
+  62 |               <p className="truncate text-sm text-muted">{meta.subtitle}</p>
+  63 |             </>
+  64 |           )} {
+  digest: '1599236333'
+}
+ GET /manifest.webmanifest 500 in 142ms (next.js: 20ms, application-code: 122ms)
+ GET /receiving 404 in 30ms (next.js: 15ms, application-code: 15ms)
+ GET /receiving 404 in 103ms (next.js: 20ms, application-code: 83ms)
+⨯ TypeError: Cannot read properties of undefined (reading 'title')
+    at TopBar (components\layout\TopBar.tsx:61:86)
+  59 |           ) : (
+  60 |             <>
+> 61 |               <h1 className="truncate font-heading text-xl font-bold text-ink">{meta.title}</h1>
+     |                                                                                      ^
+  62 |               <p className="truncate text-sm text-muted">{meta.subtitle}</p>
+  63 |             </>
+  64 |           )} {
+  digest: '1599236333'
+}
+ GET /manifest.webmanifest 500 in 170ms (next.js: 28ms, application-code: 142ms)
+ GET / 200 in 177ms (next.js: 13ms, application-code: 164ms)
+ GET /actions 404 in 53ms (next.js: 19ms, application-code: 34ms)
+ GET /actions 404 in 101ms (next.js: 19ms, application-code: 82ms)
+⨯ TypeError: Cannot read properties of undefined (reading 'title')
+    at TopBar (components\layout\TopBar.tsx:61:86)
+  59 |           ) : (
+  60 |             <>
+> 61 |               <h1 className="truncate font-heading text-xl font-bold text-ink">{meta.title}</h1>
+     |                                                                                      ^
+  62 |               <p className="truncate text-sm text-muted">{meta.subtitle}</p>
+  63 |             </>
+  64 |           )} {
+  digest: '1599236333'
+}
+ GET /manifest.webmanifest 500 in 152ms (next.js: 25ms, application-code: 127ms)
+ GET / 200 in 185ms (next.js: 10ms, application-code: 175ms)
+ GET /actions 404 in 71ms (next.js: 34ms, application-code: 38ms)
+ GET /actions 404 in 133ms (next.js: 25ms, application-code: 108ms)
+⨯ TypeError: Cannot read properties of undefined (reading 'title')
+    at TopBar (components\layout\TopBar.tsx:61:86)
+  59 |           ) : (
+  60 |             <>
+> 61 |               <h1 className="truncate font-heading text-xl font-bold text-ink">{meta.title}</h1>
+     |                                                                                      ^
+  62 |               <p className="truncate text-sm text-muted">{meta.subtitle}</p>
+  63 |             </>
+  64 |           )} {
+  digest: '1599236333'
+}
+ GET /manifest.webmanifest 500 in 180ms (next.js: 29ms, application-code: 151ms)
+ GET / 200 in 192ms (next.js: 21ms, application-code: 171ms)
+ GET / 200 in 286ms (next.js: 23ms, application-code: 262ms)
+ GET /inventory 404 in 95ms (next.js: 26ms, application-code: 69ms)
+ GET /inventory 404 in 207ms (next.js: 34ms, application-code: 173ms)
+ GET / 200 in 196ms (next.js: 14ms, application-code: 182ms)

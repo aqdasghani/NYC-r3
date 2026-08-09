@@ -91,10 +91,10 @@ def detect_product_risks(product: Product, sales: list[Sale], batches: list[Inve
     detections: list[Detection] = []
     if prior_avg >= 0.8 and last_avg >= 1.3 * prior_avg and last_avg > 0 and total_qty <= max(10, velocity * 10):
         detections.append(Detection("Demand Spike", "WARNING", product.id, active_batch.id, float(total_qty * (product.selling_price or 0)), {"last_week_avg": last_avg, "prior_avg": prior_avg}))
-    if days_of_supply(total_qty, velocity) > 90:
+    if velocity >= 0.15 and days_of_supply(total_qty, velocity) > 90:
         detections.append(Detection("Overstock", "WARNING", product.id, active_batch.id, float(total_qty * (product.purchase_price or 0)), {"days_of_supply": days_of_supply(total_qty, velocity)}))
     eta = stockout_eta(total_qty, velocity)
-    if velocity > 0 and eta <= 5:
+    if velocity >= 0.15 and eta <= 5:
         detections.append(Detection("Stockout Risk", "CRITICAL", product.id, active_batch.id, 0.0, {"stockout_eta": eta}))
     purchase = float(product.purchase_price or 0)
     selling = float(product.selling_price or 0)

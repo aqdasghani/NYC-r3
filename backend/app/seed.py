@@ -284,12 +284,16 @@ def _run_seed(db: Session) -> dict:
         product = add_product(_pick_name(rng, category, used_names), category, rng.uniform(*PRICE_BANDS[category]))
         add_batch(product, 0, expiry_offset=rng.randint(60, 300), last_sale_offset=rng.randint(90, 180), days_in_store=rng.randint(120, 300))
 
-    # -- good stock (rest, qty 6-20 so inventory value lands near ₹4,80k) --
+    # -- good stock (rest) ---------------------------------------------------
+    # Quantity is scaled to the seeded sales rate (3-8 sale days x qty 1-8 over
+    # 30 days) so days-of-supply lands in a healthy 35-80 band. This keeps the
+    # full-store detection sweep quiet except for the curated storyline risks,
+    # and pushes inventory value toward the dashboard's ~₹4.8L figure.
     good_target = product_count - len(products)
     for _ in range(good_target):
         category = rng.choice(CATEGORIES)
         product = add_product(_pick_name(rng, category, used_names), category, rng.uniform(*PRICE_BANDS[category]))
-        add_batch(product, rng.randint(6, 20), expiry_offset=rng.randint(31, 365),
+        add_batch(product, rng.randint(25, 60), expiry_offset=rng.randint(31, 365),
                   last_sale_offset=rng.randint(0, 30), days_in_store=rng.randint(0, 60))
 
     db.add_all(batches)
