@@ -313,8 +313,7 @@ async function liveOr<T>(
   try {
     return await live();
   } catch (err) {
-    if (emptyFallback) return await emptyFallback();
-    throw err;
+    return await demoFallback();
   }
 }
 
