@@ -42,7 +42,7 @@ export function MarketingLayout({
       </nav>
 
       {/* Main Content */}
-      <main className="flex-1 w-full mt-20">
+      <main className="flex-1 w-full">
         {children}
       </main>
 

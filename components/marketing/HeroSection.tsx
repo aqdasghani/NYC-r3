@@ -28,7 +28,7 @@ export function HeroSection() {
   const [activeTab, setActiveTab] = useState('Dashboard');
 
   return (
-    <section className="relative pt-32 pb-32 overflow-hidden bg-white">
+    <section className="relative pt-8 md:pt-12 pb-20 overflow-hidden bg-white">
       <div className="container mx-auto px-6 max-w-7xl relative z-10">
         <div className="grid lg:grid-cols-2 gap-16 items-center">
           
