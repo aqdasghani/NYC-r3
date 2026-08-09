@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     WHATSAPP_PHONE_ID: str = ""
 
     # CORS — comma-separated origins
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001"
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001,https://greenshop-ai.vercel.app,*"
 
     # Scheduler
     DISABLE_SCHEDULER: bool = False

@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "tunnel": "npx localtunnel --port 8000"
   },
   "engines": {
     "node": ">=20.9.0"
