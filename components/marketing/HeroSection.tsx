@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight, CheckCircle2, Calendar, Activity, Bell, ChevronRight, BarChart3 } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Calendar, Activity, Bell, ChevronRight, BarChart3, Sparkles, Check, Home, Package, ShoppingCart, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
@@ -10,7 +10,7 @@ const features = [
   "Expiry Intelligence",
   "AI Recommendations",
   "Waste Prevention",
-  "Multi-Store"
+  "Multi-Store Management"
 ];
 
 const stagger = {
@@ -26,7 +26,7 @@ const fadeUp = {
 
 export function HeroSection() {
   return (
-    <section className="relative pt-32 pb-32 overflow-hidden">
+    <section className="relative pt-32 pb-32 overflow-hidden bg-white">
       <div className="container mx-auto px-6 max-w-7xl relative z-10">
         <div className="grid lg:grid-cols-2 gap-16 items-center">
           
@@ -37,28 +37,28 @@ export function HeroSection() {
             variants={stagger}
             className="flex flex-col gap-8 max-w-2xl"
           >
-            <motion.div variants={fadeUp} className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-panel text-brand-green-light text-sm font-medium w-fit border-brand-green/30 shadow-[0_0_15px_rgba(16,185,129,0.15)]">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-green opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-green"></span>
-              </span>
-              AI Powered, Zero Waste, More Profit.
+            <motion.div variants={fadeUp} className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-green/10 text-brand-green font-semibold text-sm w-fit">
+              <Sparkles className="w-4 h-4" />
+              AI-Powered Retail Intelligence
             </motion.div>
             
-            <motion.h1 variants={fadeUp} className="text-5xl lg:text-7xl font-bold tracking-tight text-text-primary leading-[1.1]">
+            <motion.h1 variants={fadeUp} className="text-5xl lg:text-[4rem] font-bold tracking-tight text-text-primary leading-[1.1]">
               Run a Smarter, <br/> Greener Shop <br/>
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-green to-emerald-300">with GreenShop AI</span>
+              <span className="text-brand-green inline-flex items-center gap-3">
+                with AI
+                <Activity className="w-10 h-10 rotate-12" />
+              </span>
             </motion.h1>
             
-            <motion.p variants={fadeUp} className="text-xl text-slate-400 leading-relaxed max-w-lg font-light">
-              AI-powered inventory, expiry & sales intelligence that helps you prevent waste, save money and grow sustainably.
+            <motion.p variants={fadeUp} className="text-xl text-text-secondary leading-relaxed max-w-lg font-medium">
+              Track inventory, prevent expiry, get AI recommendations and reduce waste. Save money. Grow sustainably.
             </motion.p>
             
-            <motion.div variants={fadeUp} className="grid grid-cols-2 gap-4 max-w-md">
+            <motion.div variants={fadeUp} className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
               {features.map((feature, idx) => (
-                <div key={idx} className="flex items-center gap-3 text-slate-300 font-medium">
-                  <div className="w-5 h-5 rounded-full bg-brand-green/20 flex items-center justify-center">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-brand-green-light" />
+                <div key={idx} className="flex items-center gap-3 text-text-primary font-semibold">
+                  <div className="w-5 h-5 rounded-full bg-brand-green flex items-center justify-center shrink-0">
+                    <Check className="w-3.5 h-3.5 text-white" />
                   </div>
                   <span className="text-sm">{feature}</span>
                 </div>
@@ -67,18 +67,26 @@ export function HeroSection() {
             
             <motion.div variants={fadeUp} className="flex flex-col sm:flex-row gap-4 pt-4">
               <Link 
-                href="/trial" 
-                className="group relative inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-brand-green text-black font-bold hover:bg-brand-green-light transition-all shadow-glow hover:translate-y-0.5 active:scale-95 overflow-hidden"
+                href="/signup" 
+                className="group relative inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-brand-green text-white font-bold hover:bg-brand-green-dark transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:scale-95"
               >
-                <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
                 <span className="relative flex items-center gap-2">Start Free Trial <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" /></span>
               </Link>
               <Link 
                 href="/demo" 
-                className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl glass-panel text-text-primary font-semibold hover:border-brand-green/50 hover:bg-slate-100 transition-all active:scale-95"
+                className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl border border-slate-200 bg-white text-text-primary font-bold hover:border-slate-300 hover:bg-slate-50 transition-all active:scale-95 shadow-sm"
               >
                 Book a Demo <Calendar className="w-5 h-5 text-slate-400" />
               </Link>
+            </motion.div>
+
+            <motion.div variants={fadeUp} className="flex items-center gap-6 text-sm text-text-secondary font-medium">
+              <div className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-brand-green" /> No credit card required
+              </div>
+              <div className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-brand-green" /> Setup in 2 minutes
+              </div>
             </motion.div>
           </motion.div>
           
@@ -89,36 +97,40 @@ export function HeroSection() {
             transition={{ duration: 1, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
             className="relative hidden lg:block h-[700px] w-full perspective-[2000px]"
           >
-            <div className="absolute top-0 right-[-10%] w-[110%] h-full glass-panel rounded-3xl flex overflow-hidden border-t-slate-200/50 border-l-slate-200/50">
+            <div className="absolute top-0 right-[-10%] w-[110%] h-[90%] bg-white rounded-3xl flex overflow-hidden shadow-2xl border border-slate-200">
               
-              {/* Sidebar */}
-              <div className="w-[240px] bg-black/40 border-r border-border p-6 flex flex-col gap-6 shrink-0 z-10 relative backdrop-blur-3xl">
-                <div className="flex items-center gap-3 font-bold text-lg mb-4 text-text-primary">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-green to-emerald-600 flex items-center justify-center shadow-glow">
-                    <Activity className="w-5 h-5 text-black" />
+              {/* Sidebar (Dark Mode) */}
+              <div className="w-[240px] bg-slate-900 border-r border-slate-800 p-6 flex flex-col gap-6 shrink-0 z-10 relative">
+                <div className="flex items-center gap-3 font-bold text-lg mb-4 text-white">
+                  <div className="w-8 h-8 rounded-lg bg-brand-green flex items-center justify-center shadow-glow">
+                    <Activity className="w-5 h-5 text-white" />
                   </div>
                   GreenShop AI
                 </div>
                 
                 <div className="flex flex-col gap-2">
-                  <div className="px-4 py-3 rounded-xl bg-brand-green/10 text-brand-green-light font-medium flex items-center gap-3 border border-brand-green/20">
-                    <BarChart3 className="w-4 h-4" /> Dashboard
+                  <div className="px-4 py-3 rounded-xl bg-brand-green/20 text-brand-green font-semibold flex items-center gap-3">
+                    <Home className="w-4 h-4" /> Dashboard
                   </div>
-                  {['Products', 'Inventory', 'Sales', 'Purchases'].map((item) => (
-                    <div key={item} className="px-4 py-3 rounded-xl text-slate-400 font-medium flex items-center gap-3 hover:text-text-primary hover:bg-white/5 transition-colors cursor-pointer">
-                      <div className="w-4 h-4 rounded border border-current opacity-50" /> {item}
+                  {[
+                    {name: 'Inventory', icon: Package}, 
+                    {name: 'Sales', icon: ShoppingCart}, 
+                    {name: 'Settings', icon: Settings}
+                  ].map((item, idx) => (
+                    <div key={idx} className="px-4 py-3 rounded-xl text-slate-400 font-medium flex items-center gap-3 hover:text-white hover:bg-white/5 transition-colors cursor-pointer">
+                      <item.icon className="w-4 h-4" /> {item.name}
                     </div>
                   ))}
                 </div>
               </div>
               
-              {/* Main Area */}
-              <div className="flex-1 p-8 flex flex-col gap-6 overflow-hidden relative">
+              {/* Main Area (White Mode) */}
+              <div className="flex-1 p-8 flex flex-col gap-6 overflow-hidden bg-slate-50 relative">
                 {/* Header */}
-                <div className="flex justify-between items-center">
-                  <h2 className="text-2xl font-bold text-text-primary">Overview</h2>
+                <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+                  <h2 className="text-xl font-bold text-slate-800">Dashboard Overview</h2>
                   <div className="flex gap-4">
-                    <div className="px-4 py-2 glass-panel rounded-xl text-sm font-medium flex items-center gap-2 text-slate-300">
+                    <div className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold flex items-center gap-2 text-slate-600">
                       May 28, 2026 <ChevronRight className="w-4 h-4 rotate-90" />
                     </div>
                   </div>
@@ -127,14 +139,13 @@ export function HeroSection() {
                 {/* Stats Bento Grid */}
                 <div className="grid grid-cols-2 gap-4">
                   {[
-                    { title: "Total Value", value: "₹4,82,340", trend: "+12.5%", isPositive: true },
-                    { title: "At Risk (Expiry)", value: "₹18,420", trend: "37 items", isPositive: false },
+                    { title: "Total Revenue", value: "₹4,82,340", trend: "+12.5% vs last month", isPositive: true },
+                    { title: "Expiry Risk Value", value: "₹18,420", trend: "-5.2% vs last month", isPositive: true },
                   ].map((stat, i) => (
-                    <div key={i} className="glass-panel p-5 rounded-2xl flex flex-col gap-2 relative overflow-hidden group">
-                      <div className="absolute inset-0 bg-gradient-to-br from-brand-green/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                      <div className="text-xs text-slate-400 font-medium">{stat.title}</div>
-                      <div className="text-3xl font-bold text-text-primary">{stat.value}</div>
-                      <div className={cn("text-xs font-semibold mt-2", stat.isPositive ? "text-brand-green-light" : "text-rose-400")}>
+                    <div key={i} className="bg-white p-5 rounded-2xl flex flex-col gap-2 relative overflow-hidden group shadow-sm border border-slate-100">
+                      <div className="text-sm text-slate-500 font-semibold">{stat.title}</div>
+                      <div className="text-3xl font-extrabold text-slate-900">{stat.value}</div>
+                      <div className={cn("text-xs font-bold mt-2", stat.isPositive ? "text-brand-green" : "text-rose-500")}>
                         {stat.trend}
                       </div>
                     </div>
@@ -142,24 +153,22 @@ export function HeroSection() {
                 </div>
                 
                 {/* Chart Area */}
-                <div className="glass-panel p-6 rounded-2xl flex-1 relative overflow-hidden group">
-                   <div className="absolute inset-0 bg-gradient-to-br from-brand-green/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                   <div className="font-bold text-text-primary mb-6">Sales Trend</div>
-                   <svg className="w-full h-full min-h-[200px]" preserveAspectRatio="none" viewBox="0 0 400 100">
+                <div className="bg-white p-6 rounded-2xl flex-1 relative overflow-hidden shadow-sm border border-slate-100">
+                   <div className="font-bold text-slate-800 mb-6 text-lg">Revenue & Waste Saved</div>
+                   <svg className="w-full h-full min-h-[180px]" preserveAspectRatio="none" viewBox="0 0 400 100">
                     <motion.path 
                       initial={{ pathLength: 0 }}
                       animate={{ pathLength: 1 }}
                       transition={{ duration: 2, ease: "easeInOut", delay: 1 }}
                       d="M0,80 Q20,75 40,80 T80,70 T120,75 T160,50 T200,60 T240,40 T280,45 T320,20 T360,25 T400,10" 
                       fill="none" 
-                      stroke="#34D399" 
+                      stroke="#10b981" 
                       strokeWidth="3" 
-                      style={{ filter: "drop-shadow(0px 4px 6px rgba(16,185,129,0.3))" }}
                     />
-                    <path d="M0,80 Q20,75 40,80 T80,70 T120,75 T160,50 T200,60 T240,40 T280,45 T320,20 T360,25 T400,10 L400,100 L0,100 Z" fill="url(#gradient)" opacity="0.1" />
+                    <path d="M0,80 Q20,75 40,80 T80,70 T120,75 T160,50 T200,60 T240,40 T280,45 T320,20 T360,25 T400,10 L400,100 L0,100 Z" fill="url(#gradient-hero)" opacity="0.1" />
                     <defs>
-                      <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                        <stop offset="0%" stopColor="#34D399" />
+                      <linearGradient id="gradient-hero" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor="#10b981" />
                         <stop offset="100%" stopColor="transparent" />
                       </linearGradient>
                     </defs>
@@ -168,18 +177,18 @@ export function HeroSection() {
               </div>
             </div>
             
-            {/* Floating Glass Element */}
+            {/* Floating Element */}
             <motion.div 
               animate={{ y: [-10, 10, -10] }}
               transition={{ repeat: Infinity, duration: 6, ease: "easeInOut" }}
-              className="absolute -left-16 top-32 glass-panel p-4 rounded-2xl z-20 flex items-center gap-4 border-t-white/30 border-l-white/30"
+              className="absolute -left-12 top-24 bg-white p-4 rounded-2xl z-20 flex items-center gap-4 shadow-xl border border-slate-100"
             >
-              <div className="w-12 h-12 rounded-xl bg-rose-500/20 flex items-center justify-center text-rose-400 border border-rose-500/30">
+              <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-amber-500 border border-amber-100">
                 <Bell className="w-5 h-5" />
               </div>
               <div>
-                <div className="font-bold text-text-primary text-sm">Alert: 5 items</div>
-                <div className="text-xs text-slate-400">Expiring in 2 days</div>
+                <div className="font-bold text-slate-800 text-sm">Action Needed</div>
+                <div className="text-xs text-slate-500 font-medium">12 items expiring soon</div>
               </div>
             </motion.div>
             

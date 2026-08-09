@@ -1,15 +1,18 @@
 "use client";
 
+import * as React from "react";
 import { motion, type HTMLMotionProps } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 type Variant = "primary" | "ghost" | "outline" | "danger";
 type Size = "sm" | "md" | "lg";
 
-interface ButtonProps extends HTMLMotionProps<"button"> {
+export interface ButtonProps extends HTMLMotionProps<"button"> {
   variant?: Variant;
   size?: Size;
+  asChild?: boolean;
 }
+
 
 const variants: Record<Variant, string> = {
   primary: "bg-accent text-bg font-semibold shadow-glow hover:bg-accent/90",

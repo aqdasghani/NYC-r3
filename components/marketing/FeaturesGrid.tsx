@@ -2,45 +2,39 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ScanLine, BrainCircuit, ShoppingCart, Store, Leaf, MessageSquare } from 'lucide-react';
+import { ScanLine, Box, Zap, Store, Leaf, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const features = [
   {
-    icon: <ScanLine className="w-6 h-6 text-brand-green-light" />,
+    icon: <ScanLine className="w-6 h-6 text-brand-green" />,
     title: "Smart Scanning & OCR",
     description: "Scan barcodes or invoices. AI extracts products, batch & expiry in seconds.",
-    span: "col-span-1 md:col-span-2 lg:col-span-4"
   },
   {
-    icon: <BrainCircuit className="w-6 h-6 text-brand-green-light" />,
-    title: "AI Intelligence",
-    description: "Predict demand and detect expiry risks automatically.",
-    span: "col-span-1 md:col-span-1 lg:col-span-2"
+    icon: <Box className="w-6 h-6 text-brand-green" />,
+    title: "AI Inventory Intelligence",
+    description: "Predict demand and detect expiry risks automatically before they happen.",
   },
   {
-    icon: <ShoppingCart className="w-6 h-6 text-brand-green-light" />,
-    title: "Action Engine",
+    icon: <Zap className="w-6 h-6 text-brand-green" />,
+    title: "AI Action Engine",
     description: "Discount, transfer, reorder or return - AI suggests the best action.",
-    span: "col-span-1 md:col-span-1 lg:col-span-2"
   },
   {
-    icon: <Store className="w-6 h-6 text-brand-green-light" />,
+    icon: <Store className="w-6 h-6 text-brand-green" />,
     title: "Multi-Store Management",
     description: "Manage multiple stores, transfer stock & compare performance across locations.",
-    span: "col-span-1 md:col-span-2 lg:col-span-4"
   },
   {
-    icon: <Leaf className="w-6 h-6 text-brand-green-light" />,
+    icon: <Leaf className="w-6 h-6 text-brand-green" />,
     title: "Sustainability Tracking",
-    description: "Track waste prevented and resources saved.",
-    span: "col-span-1 md:col-span-1 lg:col-span-3"
+    description: "Track waste prevented, CO2 reduced, and overall resources saved.",
   },
   {
-    icon: <MessageSquare className="w-6 h-6 text-brand-green-light" />,
+    icon: <MessageSquare className="w-6 h-6 text-brand-green" />,
     title: "WhatsApp Assistant",
     description: "Get daily updates, alerts and recommendations directly on WhatsApp.",
-    span: "col-span-1 md:col-span-1 lg:col-span-3"
   }
 ];
 
@@ -59,37 +53,27 @@ const item = {
 
 export function FeaturesGrid() {
   return (
-    <section className="py-24 relative overflow-hidden">
-      {/* Background radial gradient for subtle lighting */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-brand-green/5 blur-[120px] rounded-full pointer-events-none" />
+    <section className="py-24 relative overflow-hidden bg-white" id="features">
       
-      <div className="container mx-auto max-w-6xl px-6 relative z-10">
+      <div className="container mx-auto max-w-7xl px-6 relative z-10">
         <div className="text-center mb-20 max-w-3xl mx-auto">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-panel text-slate-300 text-sm font-medium mb-6"
-          >
-            Capabilities
-          </motion.div>
           <motion.h2 
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.1 }}
-            className="text-4xl md:text-5xl font-bold text-text-primary mb-6 tracking-tight"
+            className="text-4xl md:text-5xl font-bold text-slate-900 mb-6 tracking-tight"
           >
-            Everything you need for a <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-green to-emerald-300">future-ready store</span>
+            Everything you need to run a <span className="text-brand-green">future-ready store</span>
           </motion.h2>
           <motion.p 
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.2 }}
-            className="text-slate-400 text-lg font-light"
+            className="text-text-secondary text-lg font-medium"
           >
-            Powerful features that simplify operations, eliminate waste, and maximize profit margins automatically.
+            Powerful features that simplify operations and maximize profit.
           </motion.p>
         </div>
 
@@ -98,25 +82,21 @@ export function FeaturesGrid() {
           initial="hidden"
           whileInView="show"
           viewport={{ once: true, margin: "-100px" }}
-          className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6"
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
         >
           {features.map((feat, idx) => (
             <motion.div 
               key={idx} 
               variants={item}
-              className={cn(
-                "glass-panel-hover p-8 rounded-3xl flex flex-col group relative overflow-hidden",
-                feat.span,
-                "border-t-white/10 border-l-white/10"
-              )}
+              className="bg-white p-8 rounded-3xl flex flex-col group relative overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300"
             >
               <div className="absolute inset-0 bg-gradient-to-br from-brand-green/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
               
-              <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-6 border border-slate-200 group-hover:scale-110 group-hover:bg-brand-green/10 group-hover:border-brand-green/30 transition-all duration-300">
+              <div className="w-14 h-14 rounded-2xl bg-brand-green/10 flex items-center justify-center mb-6 border border-brand-green/20 group-hover:scale-110 group-hover:bg-brand-green/20 transition-all duration-300">
                 {feat.icon}
               </div>
-              <h3 className="text-xl font-bold text-text-primary mb-3 tracking-tight">{feat.title}</h3>
-              <p className="text-slate-400 leading-relaxed font-light">
+              <h3 className="text-xl font-extrabold text-slate-900 mb-3 tracking-tight relative z-10">{feat.title}</h3>
+              <p className="text-slate-500 leading-relaxed font-medium relative z-10">
                 {feat.description}
               </p>
             </motion.div>

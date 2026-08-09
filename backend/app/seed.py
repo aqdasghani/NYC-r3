@@ -347,7 +347,7 @@ def _run_seed(db: Session) -> dict:
             elif product in overstock_products:
                 qty = rng.randint(1, 4)
             elif product in low_stock_products:
-                qty = rng.randint(1, 3)
+                qty = 2  # steady — stockout is their signal, not a false demand spike
             else:
                 qty = rng.randint(1, 8)
             sale_rows.append(Sale(
@@ -356,8 +356,11 @@ def _run_seed(db: Session) -> dict:
                 quantity_sold=qty,
                 sale_price=float(product.selling_price or 0),
                 gst_amount=round(float(product.selling_price or 0) * qty * 0.12, 2),
-                sale_date=datetime.combine(today - timedelta(days=offset), datetime.min.time())
-                + timedelta(hours=rng.randint(8, 21)),
+                # Naive-UTC (matching utcnow() used by runtime POS sales) so the
+                # detection engine's UTC windows line up — local time here would
+                # shift "last 7 days" to 8 days and fabricate demand spikes.
+                sale_date=utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+                - timedelta(days=offset) + timedelta(hours=rng.randint(8, 21)),
             ))
     db.add_all(sale_rows)
     db.flush()

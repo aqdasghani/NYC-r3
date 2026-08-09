@@ -43,7 +43,7 @@ def reorder_quantity(current_qty: int, velocity: float, lead_time_days: int, saf
     return max(0, math.ceil(velocity * (lead_time_days + safety_stock_days)) - current_qty)
 
 
-def demand_spike(last_week_units: int, prior_units: int, threshold: float = 1.3) -> bool:
+def demand_spike(last_week_units: int, prior_units: int, threshold: float = 1.5) -> bool:
     if prior_units <= 0:
         return last_week_units > 0
     return (last_week_units / 7) >= threshold * (prior_units / 28)

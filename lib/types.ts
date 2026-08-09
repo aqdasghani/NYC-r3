@@ -166,3 +166,38 @@ export interface FeaturedRisk {
   estLeftover: number;
   riskValue: number;
 }
+
+// ---------------------------------------------------------- live dashboard
+
+/** One point of the sales trend line chart. */
+export interface SalesTrendPoint {
+  date: string; // yyyy-mm-dd
+  revenue: number;
+  units: number;
+}
+
+/** One slice of the inventory health donut. */
+export interface StockHealthSegment {
+  name: string;
+  value: number;
+  color: string;
+}
+
+/** One bucket of the expiry timeline (0-3, 4-7, 8-15, 16-30, 30+ days). */
+export interface ExpiryTimelineBucket {
+  label: string;
+  min_days: number;
+  max_days: number;
+  items: number;
+  value: number;
+}
+
+/** A POS sale / transaction row. */
+export interface Transaction {
+  id: string;
+  time: string; // ISO datetime
+  items: number;
+  total: number;
+  status: "COMPLETED" | "PENDING";
+}
+

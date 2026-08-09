@@ -1,4 +1,4 @@
-import type { Variants } from "motion/react";
+import type { Variants } from "framer-motion";
 
 /** Signature ease curve used across the app (Apple-like deceleration). */
 export const EASE = [0.16, 1, 0.3, 1] as const;

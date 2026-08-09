@@ -70,10 +70,7 @@ export default function ActionsPage() {
     if (!selected || working) return;
     setWorking(action.id);
     try {
-      const result = await executeAction(action.id, {
-        action_type: selected.action_type,
-        params: selected.params,
-      });
+      const result = await executeAction(action.id, selected);
       setDone((prev) => new Set(prev).add(action.id));
       setActions((prev) => prev.filter((a) => a.id !== action.id));
       setScanResult(

@@ -1,6 +1,6 @@
 "use client";
 
-import { MotionConfig } from "motion/react";
+import { MotionConfig } from "framer-motion";
 import { Toaster } from "@/components/ui/Toaster";
 import { LenisProvider } from "./LenisProvider";
 

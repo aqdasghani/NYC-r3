@@ -89,7 +89,9 @@ def detect_product_risks(product: Product, sales: list[Sale], batches: list[Inve
     velocity = sum(s.quantity_sold for s in last_14) / 14 if last_14 else 0.0
     active_batch = next((b for b in batches if b.quantity > 0), batches[0])
     detections: list[Detection] = []
-    if prior_avg >= 0.8 and last_avg >= 1.3 * prior_avg and last_avg > 0 and total_qty <= max(10, velocity * 10):
+    # +50% is a real spike; a +30% wobble is just daily-sales boundary noise on
+    # a rolling window (a steady 2/day seller drifts to 1.45x as window edges shift).
+    if prior_avg >= 0.8 and last_avg >= 1.5 * prior_avg and last_avg > 0 and total_qty <= max(10, velocity * 10):
         detections.append(Detection("Demand Spike", "WARNING", product.id, active_batch.id, float(total_qty * (product.selling_price or 0)), {"last_week_avg": last_avg, "prior_avg": prior_avg}))
     # Overstock only counts on products with real turnover (>=1 unit/day); a
     # slow mover with a big shelf is a dead-stock problem, not an overstock one.
@@ -116,7 +118,13 @@ def run_detection(db: Session, store_id) -> dict:
     # Batch-load the whole store's active batches and recent sales once, grouped
     # by product, so the per-product sweep is a pure in-memory pass (was N queries).
     batches_by_product: dict[Any, list[InventoryBatch]] = defaultdict(list)
-    for batch in db.scalars(select(InventoryBatch).where(InventoryBatch.store_id == store_id, InventoryBatch.quantity > 0)):
+    # Expired batches are already-incurred waste, not a preventable risk — mirror
+    # the analytics at-risk definition (0 <= days <= 15) and skip them here.
+    for batch in db.scalars(select(InventoryBatch).where(
+        InventoryBatch.store_id == store_id,
+        InventoryBatch.quantity > 0,
+        InventoryBatch.expiry_date >= datetime.now().date(),
+    )):
         batches_by_product[batch.product_id].append(batch)
     sales_by_product: dict[Any, list[Sale]] = defaultdict(list)
     for sale in db.scalars(select(Sale).where(Sale.store_id == store_id, Sale.sale_date >= since)):

@@ -7,6 +7,7 @@ export const metadata: Metadata = {
 };
 
 import { GlobalStateProvider } from "@/components/GlobalState";
+import { LiveProvider } from "@/providers/LiveProvider";
 
 export default function RootLayout({
   children,
@@ -17,7 +18,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <GlobalStateProvider>
-          {children}
+          <LiveProvider>{children}</LiveProvider>
         </GlobalStateProvider>
       </body>
     </html>

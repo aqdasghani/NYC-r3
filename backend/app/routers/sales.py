@@ -1,7 +1,7 @@
 """POS sales with FEFO batch allocation and GST receipts."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import uuid4
 
@@ -42,7 +42,7 @@ async def create_sale(payload: PosSaleRequest, user: User = Depends(get_current_
             product_ids.append(product.id)
             unit_price = Decimal(str(product.selling_price or 0)); rate = Decimal(str(product.gst_rate or 0))
             for batch, qty in allocations:
-                batch.quantity -= qty; batch.last_sale_date = datetime.now(timezone.utc).date().replace()
+                batch.quantity -= qty; batch.last_sale_date = date.today()
                 sale_sub = unit_price * qty; sale_gst = sale_sub * rate / Decimal("100")
                 sale = Sale(store_id=store_id, product_id=product.id, batch_id=batch.id, quantity_sold=qty, sale_price=unit_price, gst_amount=sale_gst, customer_id=payload.customer_id, pos_session_id=payload.pos_session_id)
                 db.add(sale)
