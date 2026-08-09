@@ -28,6 +28,7 @@ const itemVariants = {
 
 export default function ProcurementPage() {
   const [showForm, setShowForm] = useState(false);
+  const [items, setItems] = useState<{ id: string, name: string, qty: number, price: number }[]>([]);
   
   return (
     <motion.div variants={containerVariants} initial="hidden" animate="show" className="space-y-6 max-w-6xl mx-auto">
@@ -70,14 +71,57 @@ export default function ProcurementPage() {
           
           <div className="mb-6">
             <label className="block text-sm font-medium text-text-secondary mb-2">Items</label>
-            <div className="border border-border-default rounded-lg p-4 bg-slate-50 flex items-center justify-center border-dashed text-text-muted hover:bg-slate-100 cursor-pointer transition-colors h-32">
+            {items.length > 0 && (
+              <div className="space-y-3 mb-4">
+                {items.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between bg-white border border-border-default p-3 rounded-lg shadow-sm">
+                    <div>
+                      <p className="font-medium text-text-primary">{item.name}</p>
+                      <p className="text-xs text-text-secondary">₹{item.price} per unit</p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-text-secondary">Qty:</span>
+                        <input type="number" min="1" value={item.qty} onChange={(e) => {
+                          const newItems = [...items];
+                          newItems[idx].qty = parseInt(e.target.value) || 0;
+                          setItems(newItems);
+                        }} className="w-20 bg-bg-surface border border-border-default rounded px-2 py-1 focus:outline-none focus:border-brand-green" />
+                      </div>
+                      <div className="font-medium text-text-primary w-20 text-right">
+                        ₹{(item.qty * item.price).toLocaleString()}
+                      </div>
+                      <button onClick={() => setItems(items.filter((_, i) => i !== idx))} className="text-red-500 text-sm hover:underline font-medium">Remove</button>
+                    </div>
+                  </div>
+                ))}
+                
+                <div className="flex justify-between items-center p-3 bg-slate-50 border border-border-default rounded-lg">
+                  <span className="font-medium text-text-primary">Total Value:</span>
+                  <span className="font-bold text-lg text-brand-green">₹{items.reduce((sum, item) => sum + (item.qty * item.price), 0).toLocaleString()}</span>
+                </div>
+              </div>
+            )}
+            
+            <div 
+              onClick={() => {
+                const productOptions = [
+                  { name: "Organic Apples", price: 120 },
+                  { name: "Almond Milk 1L", price: 250 },
+                  { name: "Whole Wheat Bread", price: 60 }
+                ];
+                const randomProduct = productOptions[items.length % productOptions.length];
+                setItems([...items, { id: Date.now().toString(), name: randomProduct.name, qty: 10, price: randomProduct.price }]);
+              }} 
+              className={`border border-border-default rounded-lg p-4 bg-slate-50 flex items-center justify-center border-dashed text-text-muted hover:bg-slate-100 hover:text-brand-green hover:border-brand-green/50 cursor-pointer transition-colors ${items.length === 0 ? 'h-32' : 'h-16'}`}
+            >
               <span className="flex items-center"><Plus className="w-4 h-4 mr-2" /> Add products to order</span>
             </div>
           </div>
           
           <div className="flex justify-end gap-3 mt-8">
-            <button onClick={() => setShowForm(false)} className="px-6 py-2 rounded-lg font-medium text-text-secondary hover:bg-slate-100 transition-colors">Cancel</button>
-            <button className="bg-brand-green text-black px-6 py-2 rounded-lg font-medium hover:bg-brand-green/90 transition-colors shadow-sm">
+            <button onClick={() => { setShowForm(false); setItems([]); }} className="px-6 py-2 rounded-lg font-medium text-text-secondary hover:bg-slate-100 transition-colors">Cancel</button>
+            <button className="bg-brand-green text-black px-6 py-2 rounded-lg font-medium hover:bg-brand-green/90 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" disabled={items.length === 0}>
               Generate PO
             </button>
           </div>

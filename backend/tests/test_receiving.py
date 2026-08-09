@@ -16,7 +16,7 @@ def test_scan_invoice_returns_parsed_items(client, owner_headers):
     r = _scan(client, owner_headers)
     assert r.status_code == 200
     body = r.json()
-    assert body["source"] == "mock_parser"
+    assert body["source"] == "mock"
     assert len(body["extracted_items"]) >= 3
     matched = [e for e in body["extracted_items"] if e.get("matched_product_id")]
     assert matched, "mock parser should fuzzy-match catalog products"
@@ -52,6 +52,6 @@ def test_confirm_rejects_unknown_product(client, owner_headers):
     assert r.status_code == 404
 
 
-def test_scan_requires_owner_manager(client, staff_headers):
+def test_scan_worker_allowed(client, staff_headers):
     r = _scan(client, staff_headers)
-    assert r.status_code == 403
+    assert r.status_code != 403

@@ -159,8 +159,10 @@ def _run_seed(db: Session) -> dict:
              role="OWNER", hashed_password=hash_password("demo1234"), store_id=store1.id),
         User(name="Priya Verma", email="priya@greenshop.ai", phone="9845012341",
              role="MANAGER", hashed_password=hash_password("demo1234"), store_id=store1.id),
+        User(name="Neha Singh", email="neha@greenshop.ai", phone="9845012343",
+             role="BILLER", hashed_password=hash_password("demo1234"), store_id=store1.id),
         User(name="Amit Kumar", email="amit@greenshop.ai", phone="9845012342",
-             role="STAFF", hashed_password=hash_password("demo1234"), store_id=store1.id),
+             role="WORKER", hashed_password=hash_password("demo1234"), store_id=store1.id),
     ]
     store1.owner_id = users[0].id
     db.add_all(users)

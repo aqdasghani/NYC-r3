@@ -1,3 +1,4 @@
+// OFFLINE FALLBACK — values are intentionally zero. Real data comes from backend.
 import type { InventoryItem, Product, RecommendationKind, StockStatus } from "@/lib/types";
 import { dateInDays, daysAgo } from "./helpers";
 
@@ -90,7 +91,7 @@ export const inventory: InventoryItem[] = rows.map((row, index) => {
     brand,
     category: "FMCG",
     unit,
-    unitPrice,
+    unitPrice: 0,
     status: classify(velocity, qty, expiryDays, idleDays),
     currentQty: qty,
     reorderPoint,
@@ -110,7 +111,7 @@ export const inventory: InventoryItem[] = rows.map((row, index) => {
     },
     expiryDays,
     estLeftover,
-    riskValue: Math.round(estLeftover * unitPrice),
+    riskValue: 0,
     aiKind: pickAiKind(product.status, index),
   };
 });

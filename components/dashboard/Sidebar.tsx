@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSidebar } from './SidebarContext';
+import { getCurrentUser } from '@/lib/api-client';
 
 const navItems = [
   { name: 'Dashboard',      path: '/dashboard',             icon: LayoutDashboard },
@@ -24,13 +25,22 @@ const navItems = [
   { name: 'Reports',        path: '/dashboard/reports',     icon: FileText },
   { name: 'Sustainability', path: '/dashboard/sustainability', icon: Leaf },
   { name: 'Alerts',         path: '/dashboard/alerts',      icon: Bell, badge: 5 },
-  { name: 'WhatsApp Hub',   path: '/dashboard/whatsapp',    icon: MessageCircle },
   { name: 'Settings',       path: '/dashboard/settings',    icon: Settings },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const { collapsed } = useSidebar();
+  const [role, setRole] = React.useState<string>('OWNER');
+
+  React.useEffect(() => {
+    try {
+      const u = getCurrentUser();
+      if (u && u.role) setRole(u.role);
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
 
   return (
     <motion.div
@@ -75,7 +85,12 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className={`flex-1 space-y-1 ${collapsed ? 'px-2' : 'px-3'}`}>
-        {navItems.map((item) => {
+        {navItems.filter(item => {
+          if (role === 'WORKER') {
+            return ['Products', 'Sales & POS'].includes(item.name);
+          }
+          return true;
+        }).map((item) => {
           const isActive = pathname === item.path;
           return (
             <Link key={item.path} href={item.path}>

@@ -50,8 +50,10 @@ class User(Base):
     name: Mapped[str] = mapped_column(sa.String(255), nullable=False)
     email: Mapped[str] = mapped_column(sa.String(255), unique=True, nullable=False, index=True)
     phone: Mapped[Optional[str]] = mapped_column(sa.String(20), unique=True, nullable=True)
-    role: Mapped[str] = mapped_column(sa.String(50), nullable=False, default="STAFF")  # OWNER/MANAGER/STAFF
-    hashed_password: Mapped[str] = mapped_column(sa.String(255), nullable=False)  # additive: self-contained JWT
+    role: Mapped[str] = mapped_column(sa.String(50), nullable=False, default="BILL")  # OWNER/MANAGER/BILLER/WORKER/BILL
+    hashed_password: Mapped[Optional[str]] = mapped_column(sa.String(255), nullable=True)  # nullable for Google auth users
+    google_id: Mapped[Optional[str]] = mapped_column(sa.String(255), unique=True, nullable=True)
+    picture_url: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
     store_id: Mapped[Optional[uuid.UUID]] = mapped_column(sa.Uuid, sa.ForeignKey("stores.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(sa.DateTime, nullable=False, default=utcnow)
 
@@ -181,6 +183,37 @@ class GreenScoreHistory(Base):
     dead_stock_score: Mapped[Optional[float]] = mapped_column(sa.Numeric(5, 2), nullable=True)
     waste_score: Mapped[Optional[float]] = mapped_column(sa.Numeric(5, 2), nullable=True)
     period_date: Mapped[date] = mapped_column(sa.Date, nullable=False)
+
+
+class MonthlyReport(Base):
+    __tablename__ = "monthly_reports"
+    __table_args__ = (sa.Index("idx_monthly_reports_store_month", "store_id", "month_year"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    store_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("stores.id"), nullable=False)
+    month_year: Mapped[str] = mapped_column(sa.String(7), nullable=False)  # YYYY-MM
+    total_sales: Mapped[float] = mapped_column(sa.Numeric(12, 2), nullable=False, default=0.0)
+    total_transactions: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=0)
+    waste_prevented_value: Mapped[float] = mapped_column(sa.Numeric(10, 2), nullable=False, default=0.0)
+    actual_waste_value: Mapped[float] = mapped_column(sa.Numeric(10, 2), nullable=False, default=0.0)
+    avg_green_score: Mapped[float] = mapped_column(sa.Numeric(5, 2), nullable=False, default=0.0)
+    top_category: Mapped[Optional[str]] = mapped_column(sa.String(100), nullable=True)
+    top_selling_product: Mapped[Optional[str]] = mapped_column(sa.String(255), nullable=True)
+    summary_json: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(sa.DateTime, nullable=False, default=utcnow)
+
+
+class BarcodeCatalog(Base):
+    __tablename__ = "barcode_catalog"
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    barcode: Mapped[str] = mapped_column(sa.String(100), unique=True, nullable=False, index=True)
+    product_name: Mapped[str] = mapped_column(sa.String(255), nullable=False)
+    brand: Mapped[Optional[str]] = mapped_column(sa.String(100), nullable=True)
+    category: Mapped[Optional[str]] = mapped_column(sa.String(100), nullable=True)
+    suggested_price: Mapped[Optional[float]] = mapped_column(sa.Numeric(10, 2), nullable=True)
+    image_url: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(sa.DateTime, nullable=False, default=utcnow)
 
 
 # ------------------------------------------------------------------------- util

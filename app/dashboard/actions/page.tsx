@@ -1,12 +1,16 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Zap, Tag, RefreshCw, ShoppingCart, CornerDownLeft, CheckCircle2, XCircle, ScanSearch } from "lucide-react";
-import { dismissAction, executeAction, generateActions, getActions } from "@/lib/api";
-import { subscribeLive } from "@/lib/live";
-import type { ActionOut, BackendRecommendation } from "@/lib/backend-types";
+import { 
+  ScanSearch, CheckCircle2, AlertTriangle, 
+  XCircle, Zap, TrendingDown, BadgePercent,
+  ArrowRightLeft, RotateCcw, PackagePlus
+} from "lucide-react";
+import { getActions, executeAction, dismissAction, generateActions } from "@/lib/api";
 import { formatINR } from "@/lib/utils";
+import type { ActionOut, BackendRecommendation } from "@/lib/backend-types";
+import { GlassCard } from "@/components/ui/GlassCard";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -14,55 +18,38 @@ const containerVariants = {
 };
 
 const itemVariants = {
-  hidden: { opacity: 0, y: 10 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.4 } },
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0 },
 };
 
-function planMeta(action: BackendRecommendation) {
-  switch (action.action_type) {
-    case "TRANSFER":
-      return { icon: RefreshCw, color: "text-brand-blue", bg: "bg-brand-blue/10", border: "border-brand-blue/20" };
-    case "REORDER":
-      return { icon: ShoppingCart, color: "text-brand-green", bg: "bg-brand-green/10", border: "border-brand-green/20" };
-    case "RETURN":
-      return { icon: CornerDownLeft, color: "text-brand-orange", bg: "bg-brand-orange/10", border: "border-brand-orange/20" };
-    case "DISCOUNT":
-    default:
-      return { icon: Tag, color: "text-brand-orange", bg: "bg-brand-orange/10", border: "border-brand-orange/20" };
-  }
-}
-
-function cardMeta(riskType: string) {
-  const t = riskType.toLowerCase();
-  if (t.includes("overstock") || t.includes("dead")) return "Transfer / Return";
-  if (t.includes("stockout") || t.includes("demand")) return "Procurement";
-  if (t.includes("expiry")) return "Sell First";
-  return "Action Needed";
+function getRiskBadgeColor(severity: string) {
+  if (severity === "CRITICAL") return "bg-red-100 text-red-800 border-red-200";
+  if (severity === "WARNING") return "bg-amber-100 text-amber-800 border-amber-200";
+  return "bg-blue-100 text-blue-800 border-blue-200";
 }
 
 export default function ActionsPage() {
   const [actions, setActions] = useState<ActionOut[]>([]);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState<string | null>(null);
-  const [done, setDone] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
+  const [filter, setFilter] = useState<string>("All");
 
   const load = async () => {
     setLoading(true);
-    const rows = await getActions("PENDING");
-    setActions(rows);
-    setLoading(false);
+    try {
+      const rows = await getActions("PENDING");
+      setActions(rows);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     void load();
-    const unsub = subscribeLive((event) => {
-      if (event.type === "recommendation_updated" || event.type === "recommendation_created") {
-        void load();
-      }
-    });
-    return unsub;
   }, []);
 
   const handleExecute = async (action: ActionOut) => {
@@ -71,13 +58,12 @@ export default function ActionsPage() {
     setWorking(action.id);
     try {
       const result = await executeAction(action.id, selected);
-      setDone((prev) => new Set(prev).add(action.id));
       setActions((prev) => prev.filter((a) => a.id !== action.id));
       setScanResult(
-        `${result.intervention} executed — ${formatINR(result.waste_prevented)} waste prevented, Green Score +${result.green_score_delta}`
+        `${result.intervention} executed – ${formatINR(result.waste_prevented)} waste prevented, Green Score +${result.green_score_delta}`
       );
-    } catch {
-      setScanResult("Could not execute this action. It may no longer be pending.");
+    } catch (e) {
+      setScanResult("Could not execute this action.");
     } finally {
       setWorking(null);
     }
@@ -99,18 +85,121 @@ export default function ActionsPage() {
     setScanResult(null);
     try {
       const result = await generateActions();
-      setScanResult(`Detection run complete — ${result.risks_detected} risks, ${result.recommendations_created} new actions.`);
+      setScanResult(`Detection run complete – ${result.risks_detected} risks, ${result.recommendations_created} new actions.`);
       await load();
-    } catch {
-      setScanResult("Detection run failed — is the backend running?");
+    } catch (e) {
+      setScanResult("Detection run failed.");
     } finally {
       setBusy(false);
     }
   };
 
+  const filters = ["All", "CRITICAL", "WARNING", "Expiry", "Overstock", "Stockout", "Margin"];
+
+  const filteredActions = useMemo(() => {
+    let result = [...actions];
+    if (filter !== "All") {
+      if (filter === "CRITICAL" || filter === "WARNING") {
+        result = result.filter(a => a.severity === filter);
+      } else {
+        result = result.filter(a => a.risk_type.toLowerCase().includes(filter.toLowerCase()));
+      }
+    }
+    // Sort by value_at_risk descending
+    result.sort((a, b) => (b.value_at_risk || 0) - (a.value_at_risk || 0));
+    return result;
+  }, [actions, filter]);
+
+  const criticalActions = filteredActions.filter(a => a.severity === "CRITICAL");
+  const highPriorityActions = filteredActions.filter(a => a.severity === "WARNING" && (a.value_at_risk || 0) > 1000);
+  const optimizationActions = filteredActions.filter(a => !criticalActions.includes(a) && !highPriorityActions.includes(a));
+
+  const renderActionCard = (action: ActionOut) => {
+    const topRec = action.recommendations?.[0];
+    if (!topRec) return null;
+
+    let ActionIcon = Zap;
+    if (topRec.action_type === "DISCOUNT") ActionIcon = BadgePercent;
+    if (topRec.action_type === "TRANSFER") ActionIcon = ArrowRightLeft;
+    if (topRec.action_type === "RETURN") ActionIcon = RotateCcw;
+    if (topRec.action_type === "REORDER") ActionIcon = PackagePlus;
+
+    return (
+      <motion.div key={action.id} layout initial="hidden" animate="show" exit={{ opacity: 0, scale: 0.95 }} variants={itemVariants}>
+        <GlassCard className="p-0 overflow-hidden border border-border-default hover:border-brand-green/50 transition-colors">
+          {/* Header */}
+          <div className="flex flex-wrap items-center justify-between gap-4 p-4 border-b border-border-default bg-slate-50/50">
+            <div className="flex items-center gap-3">
+              {action.severity === "CRITICAL" && <AlertTriangle className="w-5 h-5 text-red-500" />}
+              {action.severity === "WARNING" && <AlertTriangle className="w-5 h-5 text-amber-500" />}
+              {action.severity !== "CRITICAL" && action.severity !== "WARNING" && <TrendingDown className="w-5 h-5 text-blue-500" />}
+              
+              <span className={`px-2.5 py-1 text-xs font-bold rounded-full border ${getRiskBadgeColor(action.severity)}`}>
+                {action.risk_type}
+              </span>
+            </div>
+            {action.value_at_risk !== null && (
+              <div className="text-sm font-semibold text-red-600 bg-red-50 px-3 py-1 rounded-full border border-red-100">
+                {formatINR(action.value_at_risk)} at risk
+              </div>
+            )}
+          </div>
+
+          <div className="p-5">
+            <h3 className="text-xl font-bold text-text-primary mb-4">{action.product_name}</h3>
+            
+            <div className="mb-4">
+              <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Why this matters</h4>
+              <p className="text-sm text-text-primary bg-amber-50/50 p-3 rounded-lg border border-amber-100/50">
+                {topRec.reasoning}
+              </p>
+            </div>
+            
+            <div className="mb-5">
+              <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Recommendation</h4>
+              <div className="flex items-start gap-3 bg-brand-green/5 p-4 rounded-lg border border-brand-green/20">
+                <div className="bg-brand-green/20 p-2 rounded-lg">
+                  <ActionIcon className="w-5 h-5 text-brand-green-dark" />
+                </div>
+                <div>
+                  <p className="font-semibold text-text-primary">
+                    {topRec.action_type}: {JSON.stringify(topRec.params).replace(/[{}"\\]/g, ' ')}
+                  </p>
+                  <div className="flex gap-4 mt-2 text-sm text-text-secondary">
+                    <span>Expected Impact: <strong className="text-brand-green-dark">{formatINR(topRec.expected_outcome)}</strong></span>
+                    <span>Confidence: <strong>{(topRec.confidence * 100).toFixed(0)}%</strong></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => handleExecute(action)}
+                disabled={!!working}
+                className="flex-1 bg-brand-green text-black px-4 py-2 rounded-lg font-semibold hover:bg-brand-green-dark hover:text-white transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                {working === action.id ? "Executing..." : "Accept"}
+              </button>
+              <button
+                onClick={() => handleDismiss(action)}
+                disabled={!!working}
+                className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg font-medium hover:bg-slate-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <XCircle className="w-4 h-4" />
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </GlassCard>
+      </motion.div>
+    );
+  };
+
   return (
     <motion.div variants={containerVariants} initial="hidden" animate="show" className="space-y-6">
-      <motion.div variants={itemVariants} className="flex flex-wrap items-end justify-between gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight mb-2">AI Action Engine</h1>
           <p className="text-text-secondary">
@@ -120,111 +209,98 @@ export default function ActionsPage() {
         <button
           onClick={handleScan}
           disabled={busy}
-          className="flex items-center gap-2 bg-brand-green text-black px-4 py-2.5 rounded-lg font-medium hover:bg-brand-green/90 transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2.5 rounded-lg font-medium hover:bg-slate-800 transition-colors disabled:opacity-50"
         >
           <ScanSearch className={`w-4 h-4 ${busy ? "animate-pulse" : ""}`} />
-          {busy ? "Scanning…" : "Run AI Scan"}
+          {busy ? "Scanning..." : "Run AI Scan"}
         </button>
-      </motion.div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {filters.map(f => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors border ${
+              filter === f 
+                ? "bg-slate-800 text-white border-slate-800" 
+                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            {f}
+          </button>
+        ))}
+      </div>
 
       {scanResult && (
         <motion.div
-          initial={{ opacity: 0, y: -6 }}
+          initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="glass-panel border border-brand-green/20 bg-brand-green/5 px-4 py-3 text-sm text-text-primary flex items-center gap-2"
+          className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg flex items-center gap-3 text-sm"
         >
-          <CheckCircle2 className="w-4 h-4 text-brand-green shrink-0" />
+          <CheckCircle2 className="w-5 h-5 shrink-0" />
           {scanResult}
         </motion.div>
       )}
 
-      <div className="grid grid-cols-1 gap-6">
-        {loading && (
-          <div className="glass-panel p-8 text-center text-text-secondary">Loading AI actions…</div>
+      {loading && (
+        <div className="p-12 text-center text-text-secondary animate-pulse">Loading AI intelligence...</div>
+      )}
+
+      <AnimatePresence>
+        {!loading && actions.length === 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="glass-panel p-16 text-center flex flex-col items-center justify-center border border-dashed border-slate-300"
+          >
+            <div className="w-16 h-16 bg-green-100 text-brand-green rounded-full flex items-center justify-center mb-4">
+              <CheckCircle2 className="w-8 h-8" />
+            </div>
+            <h3 className="text-xl font-bold text-slate-800 mb-2">All Clear! No pending recommendations.</h3>
+            <p className="text-slate-500 max-w-md">
+              Your inventory is fully optimized. Green Quant will notify you when new risks are detected.
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="space-y-8">
+        {criticalActions.length > 0 && (
+          <section>
+            <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-red-500"></span>
+              🔴 Critical Interventions
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {criticalActions.map(renderActionCard)}
+            </div>
+          </section>
         )}
 
-        <AnimatePresence>
-          {!loading && actions.length === 0 && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="glass-panel p-12 text-center flex flex-col items-center justify-center"
-            >
-              <div className="w-16 h-16 bg-brand-green/10 text-brand-green rounded-full flex items-center justify-center mb-4 border border-brand-green/20">
-                <CheckCircle2 className="w-8 h-8" />
-              </div>
-              <h3 className="text-xl font-bold text-text-primary mb-2">All Caught Up!</h3>
-              <p className="text-text-secondary max-w-md">
-                You have reviewed all pending AI actions. Green Quant is continuously monitoring your inventory for new optimizations.
-              </p>
-            </motion.div>
-          )}
+        {highPriorityActions.length > 0 && (
+          <section>
+            <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-amber-500"></span>
+              🟡 High Priority
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {highPriorityActions.map(renderActionCard)}
+            </div>
+          </section>
+        )}
 
-          {actions.map((action) => {
-            const top = action.recommendations?.[0];
-            const meta = top ? planMeta(top) : planMeta({ action_type: "DISCOUNT", params: {}, expected_outcome: 0, confidence: 0, reasoning: "" } as BackendRecommendation);
-            const Icon = meta.icon;
-            const planText = top
-              ? `${top.action_type.charAt(0) + top.action_type.slice(1).toLowerCase()} — ${top.reasoning}`
-              : action.risk_type;
-            const isDone = done.has(action.id);
-            return (
-              <motion.div
-                key={action.id}
-                layout
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, x: -50 }}
-                className={`glass-panel p-6 relative overflow-hidden group ${isDone ? "opacity-60" : ""}`}
-              >
-                <div className={`absolute top-0 left-0 w-1 h-full ${meta.bg} ${meta.border}`} />
-
-                <div className="flex flex-col md:flex-row gap-6 items-start md:items-center">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2 flex-wrap">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${meta.bg} ${meta.border} border`}>
-                        <Icon className={`w-5 h-5 ${meta.color}`} />
-                      </div>
-                      <h3 className="text-xl font-semibold text-text-primary">{action.product_name}</h3>
-                      <span className="text-[10px] uppercase tracking-wider font-bold text-text-secondary bg-bg-app border border-border-default px-2 py-1 rounded">
-                        {cardMeta(action.risk_type)}
-                      </span>
-                      <span className="text-xs font-bold text-red-500">{formatINR(action.value_at_risk ?? 0)} at risk</span>
-                    </div>
-
-                    <div className="pl-13">
-                      <p className="text-text-secondary text-sm mb-3">
-                        {action.risk_type} · severity {action.severity}
-                      </p>
-                      <div className="inline-flex items-start gap-2 bg-bg-app px-3 py-2 rounded-lg border border-border-default max-w-full">
-                        <Zap className="w-4 h-4 text-brand-green shrink-0 mt-0.5" />
-                        <span className="text-sm font-medium text-text-primary">{planText}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 w-full md:w-auto mt-4 md:mt-0 pl-13 md:pl-0">
-                    <button
-                      onClick={() => handleExecute(action)}
-                      disabled={!!working || isDone}
-                      className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-brand-green text-black px-6 py-2.5 rounded-lg font-medium hover:bg-brand-green/90 transition-colors shadow-[0_0_15px_rgba(34,197,94,0.3)] disabled:opacity-50"
-                    >
-                      {working === action.id ? "Executing…" : "Execute Plan"}
-                    </button>
-                    <button
-                      onClick={() => handleDismiss(action)}
-                      disabled={!!working || isDone}
-                      className="p-2.5 rounded-lg border border-border-default text-text-secondary hover:text-text-primary hover:bg-slate-100 transition-colors disabled:opacity-50"
-                      title="Dismiss"
-                    >
-                      <XCircle className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
+        {optimizationActions.length > 0 && (
+          <section>
+            <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-blue-500"></span>
+              🟢 Optimization Opportunities
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {optimizationActions.map(renderActionCard)}
+            </div>
+          </section>
+        )}
       </div>
     </motion.div>
   );

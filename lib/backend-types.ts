@@ -157,6 +157,9 @@ export interface DashboardKpis {
   expired_count: number;
   expired_value: number;
   waste_prevented_mtd: number;
+  today_revenue?: number;
+  today_orders?: number;
+  today_units?: number;
 }
 
 export interface AiPriorityAction {
@@ -305,4 +308,64 @@ export interface DetectionRunSummary {
 
 export interface MessageOut {
   message: string;
+}
+
+export interface HourlySalesPoint {
+  hour: number;
+  revenue: number;
+  units: number;
+  orders: number;
+}
+
+export interface WeeklyComparison {
+  this_week: { revenue: number; units: number; transactions: number; start: string; end: string };
+  last_week: { revenue: number; units: number; transactions: number; start: string; end: string };
+  revenue_growth_pct: number;
+}
+
+export interface MonthlyComparison {
+  this_month: { revenue: number; units: number; transactions: number; start: string; end: string };
+  last_month: { revenue: number; units: number; transactions: number; start: string; end: string };
+  revenue_growth_pct: number;
+}
+
+export interface HeatmapRow {
+  day_index: number;
+  day_name: string;
+  hours: Array<{day: number; hour: number; revenue: number; units: number}>;
+}
+
+export interface InventoryIntelligence {
+  healthy: { count: number; value: number };
+  low_stock: { count: number; value: number };
+  overstock: { count: number; value: number };
+  dead_stock: { count: number; value: number };
+  near_expiry: { count: number; value: number };
+  expired: { count: number; value: number };
+}
+
+export interface DemandPoint {
+  date: string;
+  units: number;
+}
+export interface HourlyDemand {
+  hour: number;
+  units: number;
+}
+export interface DowDemand {
+  day: string;
+  day_index?: number;
+  units: number;
+}
+export interface ProductDemand {
+  product_id?: string;
+  product_name?: string;
+  total_revenue_30d: number;
+  total_units_30d: number;
+  velocity_per_day: number;
+  peak_hour?: number | null;
+  peak_day?: string | null;
+  daily_series: DemandPoint[];
+  hourly_pattern: HourlyDemand[];
+  dow_pattern: DowDemand[];
 }

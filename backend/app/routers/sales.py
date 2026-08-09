@@ -8,7 +8,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 
-from ..deps import get_current_user, get_owner_manager, get_db
+from ..deps import get_current_user, get_owner_manager, get_biller_up, get_db
 from ..models.database import InventoryBatch, Product, Sale, User, utcnow
 from ..models.schemas import PosSaleRequest, PosSaleResponse, Receipt, ReceiptLine, SaleOut, SalesTrendPoint
 from ..utils.fefo import allocate, InsufficientStockError
@@ -24,7 +24,7 @@ def _store(user: User):
 
 
 @router.post("/api/pos/sale", response_model=PosSaleResponse)
-async def create_sale(payload: PosSaleRequest, user: User = Depends(get_current_user), db=Depends(get_db)):
+async def create_sale(payload: PosSaleRequest, user: User = Depends(get_biller_up), db=Depends(get_db)):
     store_id = _store(user)
     lines, subtotal, gst_total, product_ids = [], Decimal("0"), Decimal("0"), []
     try:

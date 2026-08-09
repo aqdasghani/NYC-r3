@@ -1,3 +1,4 @@
+// OFFLINE FALLBACK — values are intentionally zero. Real data comes from backend.
 import type { ExecutedAction } from "@/lib/types";
 import { hoursAgo } from "./helpers";
 
@@ -6,7 +7,7 @@ export const recentActions: ExecutedAction[] = [
     id: "act-1",
     kind: "DISCOUNT",
     productName: "Parle-G 500g",
-    valueSaved: 1240,
+    valueSaved: 0,
     scoreImpact: 1,
     status: "success",
     executedAt: hoursAgo(2),
@@ -15,7 +16,7 @@ export const recentActions: ExecutedAction[] = [
     id: "act-2",
     kind: "TRANSFER",
     productName: "Amul Cheese 200g",
-    valueSaved: 890,
+    valueSaved: 0,
     scoreImpact: 1,
     status: "in_progress",
     executedAt: hoursAgo(4),

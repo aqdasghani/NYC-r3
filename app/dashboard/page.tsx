@@ -108,7 +108,7 @@ export default function DashboardPage() {
   const k = summary.kpis;
   const donut = summary.donut;
   const totalProducts = k.product_count || 1;
-  const trend = summary.sales_trend.map((p) => ({ name: p.date.slice(5), value: p.revenue }));
+  const trend = (summary.sales_trend || []).map((p) => ({ name: p.date ? p.date.slice(5) : "", value: p.revenue }));
   const timeline = summary.expiry_timeline;
   const maxTimelineItems = Math.max(1, ...timeline.map((t) => t.items));
   const ai = summary.ai_priority;
@@ -117,11 +117,12 @@ export default function DashboardPage() {
   const mini = summary.mini_kpis;
 
   const topMetrics = [
-    { title: "Total Inventory Value", value: formatCompactINR(k.inventory_value), sub: `↑ ${k.inventory_value_delta_pct}% vs last month`, subColor: "text-green-600", icon: Briefcase, iconBg: "bg-green-100", iconColor: "text-green-600" },
-    { title: "Total Products", value: k.product_count.toLocaleString("en-IN"), sub: `↑ ${k.product_count_delta_pct}% vs last month`, subColor: "text-green-600", icon: ShoppingBag, iconBg: "bg-blue-100", iconColor: "text-blue-600" },
-    { title: "At Risk (Near Expiry)", value: `${k.at_risk_count} Items`, sub: `${formatINR(k.at_risk_value)} value at risk`, subColor: "text-slate-500", icon: AlertTriangle, iconBg: "bg-orange-100", iconColor: "text-orange-500" },
-    { title: "Expired Items", value: `${k.expired_count} Items`, sub: `${formatINR(k.expired_value)} loss`, subColor: "text-slate-500", icon: XCircle, iconBg: "bg-red-100", iconColor: "text-red-500" },
-    { title: "Waste Prevented", value: formatINR(k.waste_prevented_mtd), sub: "This month", subColor: "text-slate-500", icon: Leaf, iconBg: "bg-green-100", iconColor: "text-emerald-600" },
+    { title: "Today's Revenue", value: k.today_revenue ? formatINR(k.today_revenue) : "₹0", sub: "Today", subColor: "text-slate-500", icon: TrendingUp, iconBg: "bg-green-100", iconColor: "text-green-600" },
+    { title: "Today's Orders", value: k.today_orders?.toString() || "0", sub: "Transactions", subColor: "text-slate-500", icon: ShoppingCart, iconBg: "bg-blue-100", iconColor: "text-blue-600" },
+    { title: "Units Sold", value: k.today_units?.toString() || "0", sub: "Items sold today", subColor: "text-slate-500", icon: Package, iconBg: "bg-indigo-100", iconColor: "text-indigo-600" },
+    { title: "Inventory Value", value: formatCompactINR(k.inventory_value), sub: `↑ ${k.inventory_value_delta_pct}% vs last month`, subColor: "text-green-600", icon: Briefcase, iconBg: "bg-green-100", iconColor: "text-green-600" },
+    { title: "At Risk", value: formatINR(k.at_risk_value), sub: `${k.at_risk_count} Items near expiry`, subColor: "text-orange-600", icon: AlertTriangle, iconBg: "bg-orange-100", iconColor: "text-orange-500" },
+    { title: "Waste Prevented", value: formatINR(k.waste_prevented_mtd), sub: "This month", subColor: "text-slate-500", icon: Leaf, iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
   ];
 
   const priorityCards = [
@@ -156,7 +157,7 @@ export default function DashboardPage() {
       )}
 
       {/* 1. Top Metrics Row */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
         {topMetrics.map((metric, i) => (
           <MetricCard key={i} {...metric} />
         ))}

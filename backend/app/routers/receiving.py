@@ -4,7 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import select
 
-from ..deps import get_db, get_owner_manager
+from ..deps import get_db, get_owner_manager, get_worker_up
 from ..engines.detection_engine import run_detection
 from ..integrations.ocr_service import extract_invoice_text, parse_invoice
 from ..models.database import InventoryBatch, Product, User
@@ -14,7 +14,7 @@ from ..ws import manager, make_event
 router = APIRouter(prefix="/api/receiving", tags=["receiving"])
 
 @router.post("/scan-invoice", response_model=ScanInvoiceResponse)
-async def scan_invoice(file: UploadFile = File(...), user: User = Depends(get_owner_manager), db=Depends(get_db)):
+async def scan_invoice(file: UploadFile = File(...), user: User = Depends(get_worker_up), db=Depends(get_db)):
     if not user.store_id: raise HTTPException(400, "User is not assigned to a store")
     data = await file.read()
     ocr = extract_invoice_text(data)
@@ -23,7 +23,7 @@ async def scan_invoice(file: UploadFile = File(...), user: User = Depends(get_ow
     return ScanInvoiceResponse(source=ocr.source, raw_text=ocr.raw_text, extracted_items=[ExtractedItem.model_validate(item) for item in parsed])
 
 @router.post("/confirm", response_model=ConfirmReceiptResponse)
-async def confirm_receipt(payload: ConfirmReceiptRequest, user: User = Depends(get_owner_manager), db=Depends(get_db)):
+async def confirm_receipt(payload: ConfirmReceiptRequest, user: User = Depends(get_worker_up), db=Depends(get_db)):
     if not user.store_id: raise HTTPException(400, "User is not assigned to a store")
     created = []
     for item in payload.items:

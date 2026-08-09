@@ -1,27 +1,64 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Boxes, LayoutDashboard, Leaf, ScanLine, Zap } from "lucide-react";
+import {
+  LayoutDashboard,
+  ShoppingCart,
+  ScanLine,
+  Package,
+  Boxes,
+  TrendingUp,
+  ClipboardList,
+  Truck,
+  ArrowLeftRight,
+  Undo2,
+  Sparkles,
+  BarChart2,
+  Settings,
+  Leaf
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GreenScoreRing } from "@/components/ui/GreenScoreRing";
 import { SidebarLink } from "./SidebarLink";
+import type { Module } from "@/lib/auth";
+import { hasPermission } from "@/lib/auth";
 
-const overview = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/inventory", label: "Inventory", icon: Boxes },
-  { href: "/receiving", label: "Smart Receiving", icon: ScanLine },
+const NAV_ITEMS = [
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, module: 'dashboard' },
+  { href: '/dashboard/pos', label: 'POS', icon: ShoppingCart, module: 'pos' },
+  { href: '/dashboard/scanner', label: 'Scanner', icon: ScanLine, module: 'scanner' },
+  { href: '/dashboard/products', label: 'Products', icon: Package, module: 'products' },
+  { href: '/dashboard/inventory', label: 'Inventory', icon: Boxes, module: 'inventory' },
+  { href: '/dashboard/sales', label: 'Sales', icon: TrendingUp, module: 'sales' },
+  { href: '/dashboard/procurement', label: 'Procurement', icon: ClipboardList, module: 'procurement' },
+  { href: '/dashboard/suppliers', label: 'Suppliers', icon: Truck, module: 'suppliers' },
+  { href: '/dashboard/transfers', label: 'Transfers', icon: ArrowLeftRight, module: 'transfers' },
+  { href: '/dashboard/returns', label: 'Returns', icon: Undo2, module: 'returns' },
+  { href: '/dashboard/actions', label: 'AI Actions', icon: Sparkles, module: 'ai' },
+  { href: '/dashboard/reports', label: 'Reports', icon: BarChart2, module: 'reports' },
+  { href: '/dashboard/settings', label: 'Settings', icon: Settings, module: 'settings' },
 ];
 
-const insights = [
-  { href: "/actions", label: "AI Actions", icon: Zap, badge: 4 },
-  { href: "/green-score", label: "Green Score", icon: Leaf },
-];
+function getCurrentRole(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  try {
+    const raw = localStorage.getItem('Green Quant_auth');
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw);
+    return parsed?.user?.role;
+  } catch { return undefined; }
+}
 
-/**
- * Fixed 240px sidebar on desktop (lg+), icon-only 68px on tablet (md–lg),
- * hidden below md — BottomNav takes over there.
- */
 export function Sidebar() {
+  const [role, setRole] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    setRole(getCurrentRole());
+  }, []);
+
+  const visibleItems = NAV_ITEMS.filter((item) => hasPermission(role, item.module as Module));
+
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-[68px] flex-col border-r border-line bg-sidebar md:flex lg:w-60">
       {/* Logo */}
@@ -41,17 +78,9 @@ export function Sidebar() {
       <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-5">
         <div className="space-y-1">
           <p className="hidden px-3 pb-2 text-[10px] font-semibold uppercase tracking-widest text-dim lg:block">
-            Overview
+            Menu
           </p>
-          {overview.map((item) => (
-            <SidebarLink key={item.href} {...item} />
-          ))}
-        </div>
-        <div className="space-y-1">
-          <p className="hidden px-3 pb-2 text-[10px] font-semibold uppercase tracking-widest text-dim lg:block">
-            Insights
-          </p>
-          {insights.map((item) => (
+          {visibleItems.map((item) => (
             <SidebarLink key={item.href} {...item} />
           ))}
         </div>

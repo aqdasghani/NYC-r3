@@ -1,396 +1,331 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import styles from "./page.module.css";
-import { Download, RefreshCcw, ScanBarcode, Plus, Minus, CreditCard, X } from "lucide-react";
-import { getBatches, getProducts, getTransactions, postSale } from "@/lib/api";
-import { subscribeLive } from "@/lib/live";
-import type { BatchOut, ProductOut, Receipt } from "@/lib/backend-types";
+import React, { useState, useEffect } from "react";
+import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import { getToken } from "@/lib/api-client";
 import { formatINR } from "@/lib/utils";
+import { TrendingUp, TrendingDown, DollarSign, Calendar, Clock, BarChart3, PieChart, Activity } from "lucide-react";
 
-interface CatalogueItem {
-  id: string;
-  name: string;
-  category: string;
-  price: number;
-  stock: number;
-  barcode: string | null;
+type Tab = "Overview" | "Today" | "Hourly" | "Weekly" | "Monthly";
+
+interface TrendData {
+  date: string;
+  revenue: number;
+  units: number;
 }
 
-interface CartLine {
-  product: CatalogueItem;
-  quantity: number;
+interface HourlyData {
+  hour: number;
+  revenue: number;
+  units: number;
 }
 
-export default function SalesPage() {
-  const [catalogue, setCatalogue] = useState<CatalogueItem[]>([]);
-  const [cart, setCart] = useState<CartLine[]>([]);
-  const [txns, setTxns] = useState<{ id: string; time: string; items: number; total: number; status: string }[]>([]);
-  const [barcode, setBarcode] = useState("");
+interface WeeklyData {
+  this_week_revenue: number;
+  last_week_revenue: number;
+  growth_pct: number;
+}
+
+interface MonthlyData {
+  this_month_revenue: number;
+  last_month_revenue: number;
+  growth_pct: number;
+}
+
+const formatHour = (hour: number) => {
+  if (hour === 0) return "12 AM";
+  if (hour < 12) return `${hour} AM`;
+  if (hour === 12) return "12 PM";
+  return `${hour - 12} PM`;
+};
+
+export default function SalesDashboard() {
+  const [activeTab, setActiveTab] = useState<Tab>("Overview");
   const [loading, setLoading] = useState(true);
-  const [placing, setPlacing] = useState(false);
-  const [receipt, setReceipt] = useState<Receipt | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const [products, batches, rows] = await Promise.all([
-      getProducts(),
-      getBatches(),
-      getTransactions(),
-    ]);
-    // Aggregate live stock per product from batches (FEFO), then merge with catalogue.
-    const stockByProduct = new Map<string, number>();
-    for (const b of batches) {
-      stockByProduct.set(b.product_id, (stockByProduct.get(b.product_id) ?? 0) + b.quantity);
-    }
-    const items: CatalogueItem[] = products.map((p: ProductOut) => ({
-      id: p.id,
-      name: p.name,
-      category: p.category ?? "General",
-      price: p.selling_price ?? p.purchase_price ?? 0,
-      stock: stockByProduct.get(p.id) ?? 0,
-      barcode: p.barcode ?? null,
-    }));
-    setCatalogue(items);
-    setTxns(rows);
-    setLoading(false);
-  }, []);
+  const [trendData, setTrendData] = useState<TrendData[]>([]);
+  const [hourlyData, setHourlyData] = useState<HourlyData[]>([]);
+  const [weeklyData, setWeeklyData] = useState<WeeklyData | null>(null);
+  const [monthlyData, setMonthlyData] = useState<MonthlyData | null>(null);
+  
+  const [todayRevenue, setTodayRevenue] = useState(0);
 
   useEffect(() => {
-    void load();
-    const unsub = subscribeLive((event) => {
-      if (event.type === "inventory_updated") void load();
-    });
-    return unsub;
-  }, [load]);
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const token = getToken();
+        const headers = { Authorization: `Bearer ${token}` };
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
-  const addToCart = (product: CatalogueItem) => {
-    if (product.stock <= 0) {
-      setNotice(`Out of stock — ${product.name}`);
-      return;
-    }
-    setCart((prev) => {
-      const existing = prev.find((l) => l.product.id === product.id);
-      if (existing) {
-        if (existing.quantity >= product.stock) return prev;
-        return prev.map((l) =>
-          l.product.id === product.id ? { ...l, quantity: l.quantity + 1 } : l
-        );
+        // Fetch Dashboard KPIs
+        const dashRes = await fetch(`${baseUrl}/api/analytics/dashboard`, { headers });
+        if (!dashRes.ok) throw new Error("Failed to fetch dashboard data");
+        const dashData = await dashRes.json();
+        
+        // Overview
+        const trendRes = await fetch(`${baseUrl}/api/analytics/sales-trend?days=30`, { headers });
+        if (!trendRes.ok) throw new Error("Failed to fetch trend data");
+        const tData = await trendRes.json();
+        setTrendData(tData);
+
+        // Hourly (Today)
+        const hourlyRes = await fetch(`${baseUrl}/api/analytics/hourly`, { headers });
+        if (!hourlyRes.ok) throw new Error("Failed to fetch hourly data");
+        const hData = await hourlyRes.json();
+        setHourlyData(hData);
+
+        // Weekly
+        const weeklyRes = await fetch(`${baseUrl}/api/analytics/weekly`, { headers });
+        if (!weeklyRes.ok) throw new Error("Failed to fetch weekly data");
+        const wData = await weeklyRes.json();
+        setWeeklyData(wData);
+
+        // Monthly
+        const monthlyRes = await fetch(`${baseUrl}/api/analytics/monthly`, { headers });
+        if (!monthlyRes.ok) throw new Error("Failed to fetch monthly data");
+        const mData = await monthlyRes.json();
+        setMonthlyData(mData);
+
+        if (dashData?.kpis?.today_revenue !== undefined) {
+          setTodayRevenue(dashData.kpis.today_revenue);
+        } else {
+          // fallback: sum from hourly
+          const sum = hData.reduce((acc: number, val: HourlyData) => acc + val.revenue, 0);
+          setTodayRevenue(sum);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "An error occurred");
+      } finally {
+        setLoading(false);
       }
-      return [...prev, { product, quantity: 1 }];
-    });
-    setNotice(null);
-  };
+    };
 
-  const updateQuantity = (productId: string, delta: number) => {
-    setCart((prev) =>
-      prev
-        .map((l) => {
-          if (l.product.id !== productId) return l;
-          const next = l.quantity + delta;
-          if (next > l.product.stock) return l;
-          return { ...l, quantity: Math.max(0, next) };
-        })
-        .filter((l) => l.quantity > 0)
-    );
-  };
+    fetchData();
+  }, []);
 
-  const applyBarcode = () => {
-    const q = barcode.trim().toLowerCase();
-    if (!q) return;
-    const hit = catalogue.find(
-      (p) => p.barcode?.toLowerCase() === q || p.name.toLowerCase().includes(q)
-    );
-    if (hit) addToCart(hit);
-    else setNotice(`No product found for "${barcode}"`);
-    setBarcode("");
-  };
-
-  const cartTotal = useMemo(
-    () => cart.reduce((sum, l) => sum + l.product.price * l.quantity, 0),
-    [cart]
-  );
-
-  const handleCheckout = async () => {
-    if (cart.length === 0 || placing) return;
-    setPlacing(true);
-    setNotice(null);
-    try {
-      const payload = cart.map((l) => ({ product_id: l.product.id, quantity: l.quantity }));
-      const response = await postSale(payload);
-      setReceipt(response.receipt);
-      const total = response.receipt.grand_total;
-      setTxns((prev) => [
-        {
-          id: response.receipt.receipt_no,
-          time: response.receipt.timestamp,
-          items: cart.reduce((sum, l) => sum + l.quantity, 0),
-          total,
-          status: "COMPLETED",
-        },
-        ...prev,
-      ]);
-      setCart([]);
-      void load(); // refresh stock after sale
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Checkout failed");
-    } finally {
-      setPlacing(false);
-    }
-  };
+  const peakHour = hourlyData.length > 0 ? hourlyData.reduce((max, h) => h.revenue > max.revenue ? h : max, hourlyData[0]) : null;
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div>
-          <h1 className={styles.title}>Point of Sale</h1>
-          <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>
-            FEFO allocation on checkout — oldest batches are sold first.
-          </p>
-        </div>
-        <div className={styles.actions}>
-          <button className={styles.btnAction} onClick={() => void load()}>
-            <RefreshCcw size={14} style={{ marginRight: 6 }} /> Sync
-          </button>
-          <button className={styles.btnAction} onClick={() => setNotice("Z-report export coming soon.")}>
-            <Download size={14} style={{ marginRight: 6 }} /> Export Z-Report
-          </button>
-        </div>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-slate-800">Sales Dashboard</h1>
       </div>
 
-      {notice && (
-        <div
-          style={{
-            background: "var(--brand-green-light)",
-            border: "1px solid var(--brand-green)",
-            color: "var(--brand-green-dark)",
-            borderRadius: 8,
-            padding: "10px 14px",
-            fontSize: 13,
-          }}
-        >
-          {notice}
-        </div>
-      )}
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 350px", gap: 24, alignItems: "start" }}>
-        {/* Left: catalogue */}
-        <div className={styles.card} style={{ display: "flex", flexDirection: "column", minHeight: 400 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <h3 className={styles.cardTitle} style={{ marginBottom: 0, border: "none", padding: 0 }}>
-              Quick Add
-            </h3>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input
-                type="text"
-                value={barcode}
-                onChange={(e) => setBarcode(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && applyBarcode()}
-                placeholder="Scan Barcode / search…"
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: "var(--radius-full)",
-                  border: "1px solid var(--border-default)",
-                  outline: "none",
-                  width: 220,
-                  fontSize: 13,
-                }}
-              />
-              <button className={styles.btnAction} style={{ borderColor: "var(--brand-blue)", color: "var(--brand-blue)" }} onClick={applyBarcode}>
-                <ScanBarcode size={14} />
-              </button>
-            </div>
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="glass-panel p-4 flex flex-col justify-between">
+          <div className="flex items-center gap-2 mb-2">
+            <DollarSign className="w-4 h-4 text-emerald-500" />
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Today's Revenue</div>
           </div>
-
-          {loading ? (
-            <div style={{ padding: 40, textAlign: "center", color: "var(--text-secondary)" }}>Loading catalogue…</div>
-          ) : (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
-                gap: 12,
-                maxHeight: 520,
-                overflowY: "auto",
-              }}
-            >
-              {catalogue.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => addToCart(p)}
-                  disabled={p.stock <= 0}
-                  style={{
-                    textAlign: "left",
-                    padding: 12,
-                    borderRadius: 10,
-                    border: "1px solid var(--border-default)",
-                    background: p.stock <= 0 ? "var(--bg-app)" : "var(--bg-surface)",
-                    cursor: p.stock <= 0 ? "not-allowed" : "pointer",
-                    opacity: p.stock <= 0 ? 0.5 : 1,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 6,
-                  }}
-                >
-                  <span style={{ fontWeight: 700, fontSize: 13, color: "var(--text-primary)" }}>{p.name}</span>
-                  <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{p.category}</span>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontWeight: 800, color: "var(--brand-green-dark)" }}>{formatINR(p.price)}</span>
-                    <span style={{ fontSize: 11, color: p.stock > 10 ? "var(--brand-green)" : "var(--brand-orange)", fontWeight: 600 }}>
-                      {p.stock} left
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
+          {loading ? <div className="h-8 bg-slate-100 animate-pulse rounded w-1/2"></div> : (
+            <div className="text-2xl font-bold text-slate-900">{formatINR(todayRevenue)}</div>
           )}
         </div>
 
-        {/* Right: cart */}
-        <div className={styles.card}>
-          <h3 className={styles.cardTitle}>Current Sale</h3>
-          {cart.length === 0 ? (
-            <p style={{ color: "var(--text-secondary)", fontSize: 13, padding: "16px 0" }}>
-              Tap a product or scan a barcode to add items.
-            </p>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 320, overflowY: "auto" }}>
-              {cart.map((l) => (
-                <div key={l.product.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {l.product.name}
-                    </div>
-                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>
-                      {formatINR(l.product.price)} × {l.quantity}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <button className={styles.btnAction} style={{ padding: "4px 8px" }} onClick={() => updateQuantity(l.product.id, -1)}>
-                      <Minus size={12} />
-                    </button>
-                    <span style={{ fontWeight: 700, width: 24, textAlign: "center" }}>{l.quantity}</span>
-                    <button className={styles.btnAction} style={{ padding: "4px 8px" }} onClick={() => updateQuantity(l.product.id, 1)}>
-                      <Plus size={12} />
-                    </button>
-                    <button
-                      className={styles.btnAction}
-                      style={{ padding: "4px 8px", color: "var(--critical, #EF4444)" }}
-                      onClick={() => updateQuantity(l.product.id, -l.quantity)}
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
+        <div className="glass-panel p-4 flex flex-col justify-between">
+          <div className="flex items-center gap-2 mb-2">
+            <Calendar className="w-4 h-4 text-blue-500" />
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">This Week Revenue</div>
+          </div>
+          {loading ? <div className="h-8 bg-slate-100 animate-pulse rounded w-1/2"></div> : (
+            <>
+              <div className="text-2xl font-bold text-slate-900">{formatINR(weeklyData?.this_week_revenue ?? 0)}</div>
+              {weeklyData && (
+                <div className={`text-xs font-medium mt-1 ${weeklyData.growth_pct >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                  {weeklyData.growth_pct >= 0 ? "↑" : "↓"} {Math.abs(weeklyData.growth_pct).toFixed(1)}% vs last week
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
+        </div>
 
-          <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border-light)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--text-secondary)", marginBottom: 4 }}>
-              <span>Subtotal</span>
-              <span>{formatINR(cartTotal)}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--text-secondary)", marginBottom: 8 }}>
-              <span>GST</span>
-              <span>Included in prices</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 18, fontWeight: 800, color: "var(--text-primary)", marginBottom: 12 }}>
-              <span>Total</span>
-              <span>{formatINR(cartTotal)}</span>
-            </div>
-            <button className={`${styles.btnAction} ${styles.btnPrimary}`} onClick={handleCheckout} disabled={cart.length === 0 || placing} style={{ width: "100%", padding: "12px", display: "flex", justifyContent: "center", alignItems: "center", gap: 8 }}>
-              <CreditCard size={16} /> {placing ? "Processing…" : "Charge " + formatINR(cartTotal)}
-            </button>
+        <div className="glass-panel p-4 flex flex-col justify-between">
+          <div className="flex items-center gap-2 mb-2">
+            <Activity className="w-4 h-4 text-purple-500" />
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">MTD Revenue</div>
           </div>
+          {loading ? <div className="h-8 bg-slate-100 animate-pulse rounded w-1/2"></div> : (
+            <>
+              <div className="text-2xl font-bold text-slate-900">{formatINR(monthlyData?.this_month_revenue ?? 0)}</div>
+            </>
+          )}
+        </div>
+
+        <div className="glass-panel p-4 flex flex-col justify-between">
+          <div className="flex items-center gap-2 mb-2">
+            {monthlyData && monthlyData.growth_pct >= 0 ? <TrendingUp className="w-4 h-4 text-emerald-500" /> : <TrendingDown className="w-4 h-4 text-red-500" />}
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">MoM Growth</div>
+          </div>
+          {loading ? <div className="h-8 bg-slate-100 animate-pulse rounded w-1/2"></div> : (
+            <>
+              <div className={`text-2xl font-bold ${monthlyData && monthlyData.growth_pct >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                {monthlyData && monthlyData.growth_pct > 0 ? "+" : ""}{monthlyData?.growth_pct?.toFixed(1) ?? 0}%
+              </div>
+              <div className="text-xs text-slate-500 font-medium mt-1">vs last month</div>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Transactions */}
-      <div className={styles.tableWrapper}>
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>Receipt</th>
-              <th>Time</th>
-              <th>Items</th>
-              <th>Total</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {txns.length === 0 && (
-              <tr>
-                <td colSpan={5} style={{ textAlign: "center", color: "var(--text-secondary)", padding: 24 }}>
-                  No transactions yet.
-                </td>
-              </tr>
+      {/* Tabs */}
+      <div className="flex gap-2 overflow-x-auto pb-2">
+        {(["Overview", "Today", "Hourly", "Weekly", "Monthly"] as Tab[]).map(tab => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`min-w-[44px] min-h-[44px] px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+              activeTab === tab 
+                ? "bg-slate-900 text-white" 
+                : "bg-white text-slate-600 hover:bg-slate-50 border border-slate-200"
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      <div className="glass-panel p-6">
+        {loading && (
+          <div className="h-64 flex items-center justify-center">
+            <div className="animate-spin w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full" />
+          </div>
+        )}
+        
+        {!loading && error && (
+          <div className="h-64 flex flex-col items-center justify-center text-center">
+            <div className="w-12 h-12 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-3">
+              <TrendingDown className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-semibold text-slate-800">Failed to load data</h3>
+            <p className="text-slate-500">{error}</p>
+          </div>
+        )}
+
+        {!loading && !error && activeTab === "Overview" && (
+          <div>
+            <h3 className="text-lg font-semibold text-slate-800 mb-4">30-Day Sales Trend</h3>
+            {trendData.length === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center text-center text-slate-500">
+                <BarChart3 className="w-8 h-8 mb-2 opacity-50" />
+                <p>No sales data yet &mdash; make your first sale</p>
+              </div>
+            ) : (
+              <div className="h-[240px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                    <XAxis dataKey="date" tickFormatter={val => val.slice(5)} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} dy={10} />
+                    <YAxis yAxisId="left" axisLine={false} tickLine={false} tickFormatter={v => `₹${v/1000}k`} tick={{ fontSize: 12, fill: '#64748B' }} />
+                    <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} />
+                    <Tooltip 
+                      formatter={(value: any, name: any) => [name === 'revenue' ? formatINR(value) : value, name === 'revenue' ? 'Revenue' : 'Units'] as [string, string]}
+                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                    />
+                    <Line yAxisId="left" type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                    <Line yAxisId="right" type="monotone" dataKey="units" stroke="#3b82f6" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             )}
-            {txns.map((t) => (
-              <tr key={t.id}>
-                <td style={{ fontWeight: 700 }}>#{t.id}</td>
-                <td>{new Date(t.time).toLocaleString("en-IN", { hour12: false })}</td>
-                <td>{t.items}</td>
-                <td style={{ fontWeight: 700 }}>{formatINR(t.total)}</td>
-                <td>
-                  <span style={{ color: "var(--brand-green)", fontWeight: 600, fontSize: 12 }}>● COMPLETED</span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Receipt modal */}
-      {receipt && (
-        <div
-          onClick={() => setReceipt(null)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 100,
-          }}
-        >
-          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, padding: 24, width: 360, maxHeight: "80vh", overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <h3 style={{ fontWeight: 800, fontSize: 16 }}>Receipt #{receipt.receipt_no}</h3>
-              <button onClick={() => setReceipt(null)} style={{ border: "none", background: "none", cursor: "pointer" }}>
-                <X size={16} />
-              </button>
-            </div>
-            <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 12 }}>
-              {new Date(receipt.timestamp).toLocaleString("en-IN")}
-            </div>
-            <div style={{ borderTop: "1px dashed #CBD5E1", paddingTop: 8 }}>
-              {receipt.lines.map((line, i) => (
-                <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "4px 0" }}>
-                  <span style={{ color: "var(--text-primary)" }}>{line.name} × {line.qty}</span>
-                  <span style={{ fontWeight: 600 }}>{formatINR(line.line_total)}</span>
-                </div>
-              ))}
-            </div>
-            <div style={{ borderTop: "1px dashed #CBD5E1", marginTop: 8, paddingTop: 8 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--text-secondary)" }}>
-                <span>Subtotal</span><span>{formatINR(receipt.subtotal)}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--text-secondary)" }}>
-                <span>GST</span><span>{formatINR(receipt.gst_total)}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 18, fontWeight: 800, color: "var(--brand-green-dark)" }}>
-                <span>Grand Total</span><span>{formatINR(receipt.grand_total)}</span>
-              </div>
-            </div>
-            <button className={`${styles.btnAction} ${styles.btnPrimary}`} style={{ width: "100%", marginTop: 16, padding: 10 }} onClick={() => setReceipt(null)}>
-              Done
-            </button>
           </div>
-        </div>
-      )}
+        )}
+
+        {!loading && !error && (activeTab === "Today" || activeTab === "Hourly") && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-slate-800">Hourly Performance</h3>
+              {activeTab === "Hourly" && peakHour && (
+                <div className="bg-emerald-50 text-emerald-700 text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  Peak: {formatHour(peakHour.hour)} ({formatINR(peakHour.revenue)})
+                </div>
+              )}
+            </div>
+            {hourlyData.length === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center text-center text-slate-500">
+                <BarChart3 className="w-8 h-8 mb-2 opacity-50" />
+                <p>No sales data yet &mdash; make your first sale</p>
+              </div>
+            ) : (
+              <div className="h-[200px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={hourlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                    <XAxis dataKey="hour" tickFormatter={formatHour} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tickFormatter={v => `₹${v/1000}k`} tick={{ fontSize: 12, fill: '#64748B' }} />
+                    <Tooltip 
+                      formatter={(value: any) => [`₹${value}`, "Amount"] as [string, string]}
+                      labelFormatter={(label: any) => `Hour: ${formatHour(label)}`}
+                      cursor={{ fill: 'rgba(16, 185, 129, 0.1)' }}
+                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                    />
+                    <Bar dataKey="revenue" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!loading && !error && activeTab === "Weekly" && (
+          <div>
+            <h3 className="text-lg font-semibold text-slate-800 mb-4">Weekly Comparison</h3>
+            {!weeklyData ? (
+              <div className="h-64 flex flex-col items-center justify-center text-center text-slate-500">
+                <BarChart3 className="w-8 h-8 mb-2 opacity-50" />
+                <p>No sales data yet &mdash; make your first sale</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-slate-50 rounded-xl p-6 border border-slate-100 flex flex-col justify-center items-center text-center">
+                  <div className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">This Week</div>
+                  <div className="text-3xl font-bold text-slate-900">{formatINR(weeklyData.this_week_revenue)}</div>
+                </div>
+                <div className="bg-slate-50 rounded-xl p-6 border border-slate-100 flex flex-col justify-center items-center text-center">
+                  <div className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">Last Week</div>
+                  <div className="text-3xl font-bold text-slate-900">{formatINR(weeklyData.last_week_revenue)}</div>
+                  <div className={`mt-3 inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold ${weeklyData.growth_pct >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                    {weeklyData.growth_pct >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                    {Math.abs(weeklyData.growth_pct).toFixed(1)}% vs Last Week
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!loading && !error && activeTab === "Monthly" && (
+          <div>
+            <h3 className="text-lg font-semibold text-slate-800 mb-4">Monthly Comparison</h3>
+            {!monthlyData ? (
+              <div className="h-64 flex flex-col items-center justify-center text-center text-slate-500">
+                <BarChart3 className="w-8 h-8 mb-2 opacity-50" />
+                <p>No sales data yet &mdash; make your first sale</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-slate-50 rounded-xl p-6 border border-slate-100 flex flex-col justify-center items-center text-center">
+                  <div className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">This Month</div>
+                  <div className="text-3xl font-bold text-slate-900">{formatINR(monthlyData.this_month_revenue)}</div>
+                </div>
+                <div className="bg-slate-50 rounded-xl p-6 border border-slate-100 flex flex-col justify-center items-center text-center">
+                  <div className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">Last Month</div>
+                  <div className="text-3xl font-bold text-slate-900">{formatINR(monthlyData.last_month_revenue)}</div>
+                  <div className={`mt-3 inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold ${monthlyData.growth_pct >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                    {monthlyData.growth_pct >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                    {Math.abs(monthlyData.growth_pct).toFixed(1)}% vs Last Month
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

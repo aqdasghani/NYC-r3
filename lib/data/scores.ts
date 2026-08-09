@@ -1,3 +1,4 @@
+// OFFLINE FALLBACK — values are intentionally zero. Real data comes from backend.
 import type { ChecklistItem, ScoreData } from "@/lib/types";
 
 /**
@@ -25,7 +26,7 @@ export const improvementChecklist: ChecklistItem[] = [
   },
   {
     id: "chk-2",
-    title: "₹8,420 potential waste prevented by AI actions",
+    title: "₹0 potential waste prevented by AI actions",
     desc: "Discounts, transfers and supplier returns executed by the Action Engine this month.",
   },
   {

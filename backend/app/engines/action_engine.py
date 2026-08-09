@@ -32,10 +32,17 @@ and a one-line reasoning. Prefer actions that prevent waste while preserving mar
 def _rule_based_recommendations(detection, product=None) -> list[Recommendation]:
     risk = detection.risk_type.lower()
     value = max(0.0, float(detection.value_at_risk or 0))
+    meta = getattr(detection, "recommendation_json", {}) or {}
+    expected_leftover = float(meta.get("expected_leftover", 10)) if isinstance(meta, dict) else 10.0
+    qty = float(meta.get("quantity", 20)) if isinstance(meta, dict) else 20.0
+    
+    # Dynamic Demand Elasticity Discount: Scale discount proportionally with leftover ratio
+    elasticity_discount = min(50, max(10, round((expected_leftover / max(1.0, qty)) * 40)))
+
     if "expiry" in risk or "waste" in risk:
-        discount = 25 if detection.severity == "CRITICAL" else 10
+        discount = 35 if detection.severity == "CRITICAL" else elasticity_discount
         actions = [
-            ("DISCOUNT", {"percent": discount}, value * 0.8, f"Discount {discount}% to clear stock before expiry."),
+            ("DISCOUNT", {"percent": discount}, value * 0.8, f"Dynamic discount of {discount}% to clear stock before expiry."),
             ("TRANSFER", {"percent_units": 50}, value * 0.5, "Move half the batch to a faster-selling store."),
             ("RETURN", {"eligible_units": "all"}, value * 0.35, "Return remaining eligible units to the supplier."),
         ]

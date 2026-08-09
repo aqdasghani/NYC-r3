@@ -5,6 +5,7 @@ import { Html5Qrcode } from "html5-qrcode";
 
 export function BarcodeScanner({ onScan }: { onScan: (code: string) => void }) {
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const isScanningRef = useRef(true);
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -17,9 +18,10 @@ export function BarcodeScanner({ onScan }: { onScan: (code: string) => void }) {
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: 250, height: 150 } },
         (decodedText) => {
+          if (!isScanningRef.current) return;
+          isScanningRef.current = false;
           onScan(decodedText);
-          scanner.pause();
-          setTimeout(() => scanner.resume(), 2000);
+          setTimeout(() => { isScanningRef.current = true; }, 2000);
         },
         () => {}
       )

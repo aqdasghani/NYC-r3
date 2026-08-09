@@ -1,198 +1,271 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { PackageSearch, Clock, Plus, Search, RefreshCw } from "lucide-react";
-import Link from "next/link";
-import { getInventory, getKPIs, getStockHealth } from "@/lib/api";
-import { subscribeLive } from "@/lib/live";
-import type { InventoryItem, KPI, StockHealthSegment } from "@/lib/types";
+import React, { useEffect, useState } from "react";
+import { CheckCircle2, AlertTriangle, Package, Archive, Clock, XCircle, TrendingDown, TrendingUp, RefreshCw } from "lucide-react";
 import { formatINR } from "@/lib/utils";
+import { getToken } from "@/lib/api-client";
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.1 } },
-};
+interface IntelligenceMetrics {
+  count: number;
+  value: number;
+}
 
-const itemVariants = {
-  hidden: { opacity: 0, y: 10 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.4 } },
-};
+interface IntelligenceData {
+  healthy: IntelligenceMetrics;
+  low_stock: IntelligenceMetrics;
+  overstock: IntelligenceMetrics;
+  dead_stock: IntelligenceMetrics;
+  near_expiry: IntelligenceMetrics;
+  expired: IntelligenceMetrics;
+}
 
-const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  CRITICAL: { label: "Critical (0-3d)", cls: "bg-red-500/10 text-red-500 border border-red-500/20" },
-  WARNING: { label: "Warning (4-15d)", cls: "bg-orange-500/10 text-orange-500 border border-orange-500/20" },
-  UPCOMING: { label: "Upcoming (16-30d)", cls: "bg-blue-500/10 text-blue-500 border border-blue-500/20" },
-  SAFE: { label: "Safe (30d+)", cls: "bg-brand-green/10 text-brand-green border border-brand-green/20" },
-  DEAD_STOCK: { label: "Dead Stock", cls: "bg-slate-200/50 text-text-secondary border border-slate-300/50" },
-  OVERSTOCK: { label: "Overstock", cls: "bg-purple-500/10 text-purple-500 border border-purple-500/20" },
-};
+interface SlowMover {
+  product_name: string;
+  category: string;
+  stock: number;
+  value: number;
+  velocity: number;
+  days_of_inventory: number;
+}
 
-export default function InventoryPage() {
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
-  const [kpis, setKpis] = useState<KPI[]>([]);
-  const [stockHealth, setStockHealth] = useState<StockHealthSegment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState("");
+interface FastMover {
+  product_name: string;
+  category: string;
+  stock: number;
+  velocity: number;
+  revenue_14d: number;
+}
 
-  const load = async () => {
-    setLoading(true);
-    const [inv, kpiData, health] = await Promise.all([getInventory(), getKPIs(), getStockHealth()]);
-    setInventory(inv);
-    setKpis(kpiData);
-    setStockHealth(health);
-    setLoading(false);
+export default function InventoryDashboard() {
+  const [intel, setIntel] = useState<IntelligenceData | null>(null);
+  const [slowMovers, setSlowMovers] = useState<SlowMover[]>([]);
+  const [fastMovers, setFastMovers] = useState<FastMover[]>([]);
+  
+  const [loadingIntel, setLoadingIntel] = useState(true);
+  const [loadingSlow, setLoadingSlow] = useState(true);
+  const [loadingFast, setLoadingFast] = useState(true);
+
+  const loadData = async () => {
+    const token = getToken();
+    const headers = { Authorization: `Bearer ${token}` };
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+
+    setLoadingIntel(true);
+    setLoadingSlow(true);
+    setLoadingFast(true);
+
+    // Intelligence
+    fetch(`${baseUrl}/api/inventory/intelligence`, { headers })
+      .then(res => res.json())
+      .then(data => {
+        // If backend returns empty array or we get error, handle it
+        if (data.healthy) {
+          setIntel(data);
+        } else {
+          setIntel(null);
+        }
+      })
+      .catch(() => setIntel(null))
+      .finally(() => setLoadingIntel(false));
+
+    // Slow Movers
+    fetch(`${baseUrl}/api/inventory/slow-movers`, { headers })
+      .then(res => res.json())
+      .then(data => setSlowMovers(Array.isArray(data) ? data : []))
+      .catch(() => setSlowMovers([]))
+      .finally(() => setLoadingSlow(false));
+
+    // Fast Movers
+    fetch(`${baseUrl}/api/inventory/fast-movers`, { headers })
+      .then(res => res.json())
+      .then(data => setFastMovers(Array.isArray(data) ? data : []))
+      .catch(() => setFastMovers([]))
+      .finally(() => setLoadingFast(false));
   };
 
   useEffect(() => {
-    void load();
-    const unsub = subscribeLive((event) => {
-      if (event.type === "inventory_updated") void load();
-    });
-    return unsub;
+    loadData();
   }, []);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return inventory;
-    return inventory.filter((item) => item.product.name.toLowerCase().includes(q));
-  }, [inventory, query]);
-
-  const kpiValue = (id: string) => kpis.find((k) => k.id === id)?.value ?? 0;
-  const criticalCount = inventory.filter((i) => i.product.status === "CRITICAL").length;
-  const deadStock = stockHealth.find((s) => s.name === "Dead Stock")?.value ?? 0;
-  const totalQty = inventory.reduce((sum, i) => sum + i.batch.qty, 0);
-
-  const stats = [
-    { label: "At-Risk Batches", value: String(inventory.length), color: "text-orange-500" },
-    { label: "Units at Risk", value: totalQty.toLocaleString("en-IN"), color: "text-text-primary" },
-    { label: "Value at Risk", value: formatINR(kpiValue("at_risk")), color: "text-red-500" },
-    { label: "Critical Expiry", value: String(criticalCount), color: "text-red-500" },
-    { label: "Dead Stock", value: String(deadStock), color: "text-slate-500" },
-  ];
-
   return (
-    <motion.div variants={containerVariants} initial="hidden" animate="show" className="space-y-6">
-      <motion.div variants={itemVariants} className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-6 pb-12">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight mb-2">Inventory & Expiry</h1>
-          <p className="text-text-secondary">Stock expiring within 15 days, flagged by the detection engine.</p>
+          <h1 className="text-2xl font-bold text-slate-800">Inventory Dashboard</h1>
+          <p className="text-slate-500 text-sm mt-1">Real-time stock intelligence and movement analysis.</p>
         </div>
-        <Link
-          href="/dashboard/scanner"
-          className="flex items-center gap-2 bg-brand-green text-black px-4 py-2 rounded-lg font-medium hover:bg-brand-green/90 transition-colors shadow-[0_0_15px_rgba(34,197,94,0.3)]"
-        >
-          <Plus className="w-4 h-4" /> Add via Receiving
-        </Link>
-      </motion.div>
-
-      {/* Stats row */}
-      <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {stats.map((stat, i) => (
-          <div key={i} className="glass-panel p-4 flex flex-col justify-between">
-            <span className="text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">{stat.label}</span>
-            <div className={`text-2xl font-bold ${stat.color}`}>{stat.value}</div>
-          </div>
-        ))}
-      </motion.div>
-
-      {/* Toolbar */}
-      <motion.div variants={itemVariants} className="flex gap-4 mb-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search at-risk products by name or batch…"
-            className="w-full bg-bg-surface border border-border-default text-text-primary rounded-lg pl-10 pr-4 py-2.5 focus:outline-none focus:border-brand-green focus:ring-1 focus:ring-brand-green/50 transition-all placeholder:text-text-muted"
-          />
-        </div>
-        <button
-          onClick={() => void load()}
-          className="glass-panel px-4 py-2 hover:bg-bg-surface/80 transition-colors flex items-center gap-2"
-          title="Refresh"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+        <button onClick={loadData} className="glass-panel px-4 py-2 hover:bg-slate-50 transition-colors flex items-center gap-2 text-sm font-semibold text-slate-700">
+          <RefreshCw className="w-4 h-4" /> Refresh
         </button>
-      </motion.div>
+      </div>
 
-      {/* Table */}
-      <motion.div variants={itemVariants} className="glass-panel overflow-hidden">
-        <div className="overflow-x-auto">
-          {loading ? (
-            <div className="p-10 text-center text-text-secondary">Loading inventory…</div>
-          ) : filtered.length === 0 ? (
-            <div className="p-10 text-center text-text-secondary">
-              {query ? "No matches for that search." : "No stock expiring soon — all clear!"}
+      {/* Intelligence Section */}
+      <div>
+        <h2 className="text-lg font-bold text-slate-800 mb-4">Stock Intelligence</h2>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {/* Healthy */}
+          <div className="glass-panel p-4 flex flex-col justify-between border-t-2 border-t-emerald-500">
+            <div className="flex items-center gap-2 mb-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              <div className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Healthy</div>
             </div>
-          ) : (
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-border-default bg-slate-50">
-                  <th className="p-4 text-xs font-medium text-text-secondary uppercase tracking-wider">Product</th>
-                  <th className="p-4 text-xs font-medium text-text-secondary uppercase tracking-wider">Stock / Velocity</th>
-                  <th className="p-4 text-xs font-medium text-text-secondary uppercase tracking-wider">Expiry</th>
-                  <th className="p-4 text-xs font-medium text-text-secondary uppercase tracking-wider">Risk Value</th>
-                  <th className="p-4 text-xs font-medium text-text-secondary uppercase tracking-wider">Status</th>
-                  <th className="p-4"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border-default">
-                {filtered.map((item) => {
-                  const badge = STATUS_BADGE[item.product.status] ?? STATUS_BADGE.SAFE;
-                  return (
-                    <tr key={item.id} className="hover:bg-bg-surface/50 transition-colors">
-                      <td className="p-4">
-                        <div className="font-medium text-text-primary">{item.product.name}</div>
-                        <div className="text-xs text-text-muted">
-                          Batch: {item.batch.batchCode || "—"} · {item.product.sku || "No SKU"}
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div className="text-text-primary">{item.batch.qty} units</div>
-                        <div className="text-xs text-text-muted">{item.product.velocityPerDay.toFixed(1)}/day</div>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-text-secondary" />
-                          <span className={item.expiryDays <= 3 ? "text-red-400" : item.expiryDays <= 15 ? "text-orange-400" : "text-text-secondary"}>
-                            {item.expiryDays}d · {item.batch.expiryDate}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="p-4 font-medium text-text-primary">
-                        {item.riskValue ? formatINR(item.riskValue) : "—"}
-                      </td>
-                      <td className="p-4">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${badge.cls}`}>{badge.label}</span>
-                      </td>
-                      <td className="p-4 text-right">
-                        <Link href="/dashboard/actions" className="text-sm font-medium text-brand-green hover:text-brand-green/80 transition-colors">
-                          {item.aiKind ? "Action" : "View"}
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </motion.div>
+            {loadingIntel ? <div className="h-10 bg-slate-100 animate-pulse rounded" /> : (
+              <div>
+                <div className="text-2xl font-bold text-slate-900">{intel?.healthy?.count ?? 0}</div>
+                <div className="text-xs text-slate-500 font-medium">{formatINR(intel?.healthy?.value ?? 0)} value</div>
+              </div>
+            )}
+          </div>
+          
+          {/* Low Stock */}
+          <div className="glass-panel p-4 flex flex-col justify-between border-t-2 border-t-amber-500">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              <div className="text-xs font-semibold text-amber-700 uppercase tracking-wider">Low Stock</div>
+            </div>
+            {loadingIntel ? <div className="h-10 bg-slate-100 animate-pulse rounded" /> : (
+              <div>
+                <div className="text-2xl font-bold text-slate-900">{intel?.low_stock?.count ?? 0}</div>
+                <div className="text-xs text-slate-500 font-medium">{formatINR(intel?.low_stock?.value ?? 0)} value</div>
+              </div>
+            )}
+          </div>
 
-      {/* Bottom hint */}
-      <motion.div variants={itemVariants} className="glass-panel p-4 flex items-start gap-3 text-sm text-text-secondary">
-        <PackageSearch className="w-4 h-4 text-brand-green shrink-0 mt-0.5" />
-        <p>
-          Showing stock expiring within 15 days. The AI detection engine rescans every few minutes —
-          run a scan from the{" "}
-          <Link href="/dashboard/actions" className="text-brand-green font-medium hover:underline">AI Action Engine</Link>{" "}
-          to refresh recommendations, and use{" "}
-          <Link href="/dashboard/scanner" className="text-brand-green font-medium hover:underline">Smart Receiving</Link>{" "}
-          to add new stock.
-        </p>
-      </motion.div>
-    </motion.div>
+          {/* Overstock */}
+          <div className="glass-panel p-4 flex flex-col justify-between border-t-2 border-t-blue-500">
+            <div className="flex items-center gap-2 mb-2">
+              <Package className="w-4 h-4 text-blue-500" />
+              <div className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Overstock</div>
+            </div>
+            {loadingIntel ? <div className="h-10 bg-slate-100 animate-pulse rounded" /> : (
+              <div>
+                <div className="text-2xl font-bold text-slate-900">{intel?.overstock?.count ?? 0}</div>
+                <div className="text-xs text-slate-500 font-medium">{formatINR(intel?.overstock?.value ?? 0)} value</div>
+              </div>
+            )}
+          </div>
+
+          {/* Dead Stock */}
+          <div className="glass-panel p-4 flex flex-col justify-between border-t-2 border-t-slate-500">
+            <div className="flex items-center gap-2 mb-2">
+              <Archive className="w-4 h-4 text-slate-500" />
+              <div className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Dead Stock</div>
+            </div>
+            {loadingIntel ? <div className="h-10 bg-slate-100 animate-pulse rounded" /> : (
+              <div>
+                <div className="text-2xl font-bold text-slate-900">{intel?.dead_stock?.count ?? 0}</div>
+                <div className="text-xs text-slate-500 font-medium">{formatINR(intel?.dead_stock?.value ?? 0)} value</div>
+              </div>
+            )}
+          </div>
+
+          {/* Near Expiry */}
+          <div className="glass-panel p-4 flex flex-col justify-between border-t-2 border-t-orange-500">
+            <div className="flex items-center gap-2 mb-2">
+              <Clock className="w-4 h-4 text-orange-500" />
+              <div className="text-xs font-semibold text-orange-700 uppercase tracking-wider">Near Expiry</div>
+            </div>
+            {loadingIntel ? <div className="h-10 bg-slate-100 animate-pulse rounded" /> : (
+              <div>
+                <div className="text-2xl font-bold text-slate-900">{intel?.near_expiry?.count ?? 0}</div>
+                <div className="text-xs text-slate-500 font-medium">{formatINR(intel?.near_expiry?.value ?? 0)} value</div>
+              </div>
+            )}
+          </div>
+
+          {/* Expired */}
+          <div className="glass-panel p-4 flex flex-col justify-between border-t-2 border-t-red-500">
+            <div className="flex items-center gap-2 mb-2">
+              <XCircle className="w-4 h-4 text-red-500" />
+              <div className="text-xs font-semibold text-red-700 uppercase tracking-wider">Expired</div>
+            </div>
+            {loadingIntel ? <div className="h-10 bg-slate-100 animate-pulse rounded" /> : (
+              <div>
+                <div className="text-2xl font-bold text-slate-900">{intel?.expired?.count ?? 0}</div>
+                <div className="text-xs text-slate-500 font-medium">{formatINR(intel?.expired?.value ?? 0)} value</div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Fast Movers Table */}
+        <div className="glass-panel flex flex-col overflow-hidden">
+          <div className="p-4 border-b border-slate-100 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-emerald-500" />
+            <h2 className="text-lg font-bold text-slate-800">Fast Movers</h2>
+          </div>
+          <div className="flex-1 overflow-x-auto">
+            {loadingFast ? (
+              <div className="p-8 flex justify-center"><div className="animate-spin w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full" /></div>
+            ) : fastMovers.length === 0 ? (
+              <div className="p-8 text-center text-slate-500">No fast movers data available.</div>
+            ) : (
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 text-slate-500">
+                  <tr>
+                    <th className="p-3 font-semibold">Product</th>
+                    <th className="p-3 font-semibold">Category</th>
+                    <th className="p-3 font-semibold text-right">Stock</th>
+                    <th className="p-3 font-semibold text-right">Velocity</th>
+                    <th className="p-3 font-semibold text-right">Rev (14d)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {fastMovers.map((m, i) => (
+                    <tr key={i} className="hover:bg-slate-50">
+                      <td className="p-3 font-medium text-slate-900">{m.product_name}</td>
+                      <td className="p-3 text-slate-500">{m.category || '—'}</td>
+                      <td className="p-3 text-right">{m.stock}</td>
+                      <td className="p-3 text-right">{m.velocity.toFixed(1)}/d</td>
+                      <td className="p-3 text-right font-medium">{formatINR(m.revenue_14d)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+        {/* Slow Movers Table */}
+        <div className="glass-panel flex flex-col overflow-hidden">
+          <div className="p-4 border-b border-slate-100 flex items-center gap-2">
+            <TrendingDown className="w-5 h-5 text-amber-500" />
+            <h2 className="text-lg font-bold text-slate-800">Slow Movers</h2>
+          </div>
+          <div className="flex-1 overflow-x-auto">
+            {loadingSlow ? (
+              <div className="p-8 flex justify-center"><div className="animate-spin w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full" /></div>
+            ) : slowMovers.length === 0 ? (
+              <div className="p-8 text-center text-slate-500">No slow movers data available.</div>
+            ) : (
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 text-slate-500">
+                  <tr>
+                    <th className="p-3 font-semibold">Product</th>
+                    <th className="p-3 font-semibold">Category</th>
+                    <th className="p-3 font-semibold text-right">Stock</th>
+                    <th className="p-3 font-semibold text-right">Velocity</th>
+                    <th className="p-3 font-semibold text-right">Days Inv</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {slowMovers.map((m, i) => (
+                    <tr key={i} className="hover:bg-slate-50">
+                      <td className="p-3 font-medium text-slate-900">{m.product_name}</td>
+                      <td className="p-3 text-slate-500">{m.category || '—'}</td>
+                      <td className="p-3 text-right">{m.stock}</td>
+                      <td className="p-3 text-right">{m.velocity.toFixed(2)}/d</td>
+                      <td className="p-3 text-right font-medium text-amber-600">{m.days_of_inventory}d</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

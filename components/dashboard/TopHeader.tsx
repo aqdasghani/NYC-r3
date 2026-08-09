@@ -1,11 +1,28 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Menu, Bell, ChevronDown } from 'lucide-react';
 import { useSidebar } from './SidebarContext';
+import { getCurrentUser } from '@/lib/api-client';
 
 export function TopHeader() {
   const { toggle } = useSidebar();
+  const [userName, setUserName] = useState('Rahul Kumar');
+  const [userRole, setUserRole] = useState('Owner');
+  const [userInitials, setUserInitials] = useState('RK');
+
+  useEffect(() => {
+    const user = getCurrentUser();
+    if (user) {
+      setUserName(user.name);
+      setUserRole(user.role);
+      const parts = user.name.split(' ');
+      const initials = parts.length > 1 
+        ? parts[0][0] + parts[parts.length - 1][0] 
+        : parts[0].substring(0, 2);
+      setUserInitials(initials.toUpperCase());
+    }
+  }, []);
 
   return (
     <header className="h-16 bg-white border-b border-[#E2E8F0] flex items-center justify-between px-4 sticky top-0 z-10 flex-shrink-0">
@@ -40,11 +57,11 @@ export function TopHeader() {
 
           <div className="flex items-center gap-3 cursor-pointer pl-4 border-l border-slate-200">
             <div className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-sm">
-              RK
+              {userInitials}
             </div>
             <div className="hidden md:block text-left">
-              <div className="text-sm font-semibold text-slate-900 leading-tight">Rahul Kumar</div>
-              <div className="text-xs font-medium text-slate-500">Owner</div>
+              <div className="text-sm font-semibold text-slate-900 leading-tight">{userName}</div>
+              <div className="text-xs font-medium text-slate-500">{userRole}</div>
             </div>
           </div>
         </div>

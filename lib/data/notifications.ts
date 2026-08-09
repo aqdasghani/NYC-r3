@@ -1,3 +1,4 @@
+// OFFLINE FALLBACK — values are intentionally zero. Real data comes from backend.
 import type { AppNotification } from "@/lib/types";
 import { hoursAgo } from "./helpers";
 
@@ -5,7 +6,7 @@ export const notifications: AppNotification[] = [
   {
     id: "n1",
     title: "AI Alert — Amul Butter",
-    body: "32 units expiring in 6 days · ₹5,850 at risk",
+    body: "32 units expiring in 6 days · ₹0 at risk",
     type: "danger",
     read: false,
     createdAt: hoursAgo(1),
@@ -21,7 +22,7 @@ export const notifications: AppNotification[] = [
   {
     id: "n3",
     title: "Green Score Up!",
-    body: "Score +2 — you prevented ₹1,240 of waste yesterday",
+    body: "Score +2 — you prevented ₹0 of waste yesterday",
     type: "success",
     read: false,
     createdAt: hoursAgo(5),

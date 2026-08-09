@@ -58,8 +58,8 @@ export function TopBar() {
             </>
           ) : (
             <>
-              <h1 className="truncate font-heading text-xl font-bold text-ink">{meta.title}</h1>
-              <p className="truncate text-sm text-muted">{meta.subtitle}</p>
+              <h1 className="truncate font-heading text-xl font-bold text-ink">{meta?.title || "Page"}</h1>
+              <p className="truncate text-sm text-muted">{meta?.subtitle || ""}</p>
             </>
           )}
         </div>

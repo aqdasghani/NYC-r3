@@ -3,21 +3,22 @@ from __future__ import annotations
 
 import math
 import uuid
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_, select
 
-from ..deps import get_current_user, get_db, get_owner, get_owner_manager
+from ..deps import get_current_user, get_db, get_owner, get_owner_manager, get_manager_up, get_worker_up
 from ..engines.expiry_engine import classify_batch, expiry_timeline, get_at_risk_batches, stock_health
 from ..engines.forecast_engine import calculate_velocity, days_of_supply, reorder_quantity, stockout_eta
-from ..models.database import InventoryBatch, Product, Supplier, User
+from ..models.database import InventoryBatch, Product, Sale, Supplier, User
 from ..models.schemas import (
     AtRiskItem, BatchCreate, BatchOut, DeadStockItem, ExpiryTimelineBucket, MessageOut,
     Page, ProductCreate, ProductDetailOut, ProductOut, ProductUpdate, ReorderSuggestion, StockHealthSegment,
 )
 from ..integrations.barcode_service import lookup_barcode
+from ..engines.inventory_engine import stock_intelligence, slow_movers as _slow_movers, fast_movers as _fast_movers
 
 router = APIRouter(prefix="/api/inventory", tags=["inventory"])
 
@@ -48,7 +49,7 @@ def list_products(page: int = 1, page_size: int = Query(50, le=200), search: str
 
 
 @router.post("/products", response_model=ProductOut)
-def create_product(payload: ProductCreate, user: User = Depends(get_owner_manager), db=Depends(get_db)):
+def create_product(payload: ProductCreate, user: User = Depends(get_manager_up), db=Depends(get_db)):
     product = Product(store_id=_store(user), **payload.model_dump())
     db.add(product); db.commit(); db.refresh(product)
     return product
@@ -64,16 +65,76 @@ def get_product(product_id: uuid.UUID, user: User = Depends(get_current_user), d
     return ProductDetailOut.model_validate(result)
 
 
+@router.get("/products/{product_id}/demand")
+def product_demand(product_id: uuid.UUID, days: int = 30, user: User = Depends(get_current_user), db=Depends(get_db)):
+    """Demand analytics for one product: totals, velocity, daily/hourly/weekday
+    patterns — all computed from the last ``days`` of Sale records."""
+    from collections import defaultdict
+    from datetime import time as dtime
+
+    store_id = _store(user)
+    if not db.scalar(select(Product).where(Product.id == product_id, Product.store_id == store_id)):
+        raise HTTPException(404, "Product not found")
+
+    since = date.today() - timedelta(days=days - 1)
+    start = datetime.combine(since, dtime.min)
+    rows = db.scalars(
+        select(Sale).where(
+            Sale.store_id == store_id,
+            Sale.product_id == product_id,
+            Sale.sale_date >= start,
+        )
+    ).all()
+
+    daily: dict[date, int] = defaultdict(int)
+    hourly: dict[int, int] = defaultdict(int)
+    dow: dict[int, int] = defaultdict(int)
+    dow_days: dict[int, set[date]] = defaultdict(set)
+    total_units = 0
+    total_revenue = 0.0
+    for sale in rows:
+        total_units += int(sale.quantity_sold or 0)
+        total_revenue += float(sale.sale_price or 0) * int(sale.quantity_sold or 0)
+        d = sale.sale_date.date()
+        daily[d] += int(sale.quantity_sold or 0)
+        hourly[sale.sale_date.hour] += int(sale.quantity_sold or 0)
+        dow[d.weekday()] += int(sale.quantity_sold or 0)
+        dow_days[d.weekday()].add(d)
+
+    days_count = max(1, (date.today() - since).days + 1)
+    dow_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    daily_series = [
+        {"date": (since + timedelta(days=i)).isoformat(), "units": daily.get(since + timedelta(days=i), 0)}
+        for i in range(days)
+    ]
+    hourly_pattern = [
+        {"hour": h, "units": round(hourly.get(h, 0) / days_count, 1)} for h in range(6, 23)
+    ]
+    dow_pattern = [
+        {"day": dow_names[w], "units": round(dow.get(w, 0) / max(1, len(dow_days.get(w, []))), 1)}
+        for w in range(7)
+    ]
+
+    return {
+        "total_revenue_30d": round(total_revenue, 2),
+        "total_units_30d": total_units,
+        "velocity_per_day": round(total_units / days_count, 2),
+        "daily_series": daily_series,
+        "hourly_pattern": hourly_pattern,
+        "dow_pattern": dow_pattern,
+    }
+
+
 @router.get("/barcode/{code}", response_model=ProductOut)
 def get_product_by_barcode(code: str, user: User = Depends(get_current_user), db=Depends(get_db)):
     store_id = _store(user)
-    product = db.scalar(select(Product).where(Product.barcode == code, Product.store_id == store_id))
+    product = lookup_barcode(db, store_id, code)
     if not product: raise HTTPException(404, f"No product found for barcode {code}")
     return product
 
 
 @router.patch("/products/{product_id}", response_model=ProductOut)
-def update_product(product_id: uuid.UUID, payload: ProductUpdate, user: User = Depends(get_owner_manager), db=Depends(get_db)):
+def update_product(product_id: uuid.UUID, payload: ProductUpdate, user: User = Depends(get_manager_up), db=Depends(get_db)):
     product = db.scalar(select(Product).where(Product.id == product_id, Product.store_id == _store(user)))
     if not product: raise HTTPException(404, "Product not found")
     for key, value in payload.model_dump(exclude_unset=True).items(): setattr(product, key, value)
@@ -96,7 +157,7 @@ def list_batches(severity: str | None = None, expiring: bool = False, user: User
 
 
 @router.post("/batches", response_model=BatchOut)
-def create_batch(payload: BatchCreate, user: User = Depends(get_owner_manager), db=Depends(get_db)):
+def create_batch(payload: BatchCreate, user: User = Depends(get_worker_up), db=Depends(get_db)):
     store_id = _store(user)
     product = db.scalar(select(Product).where(Product.id == payload.product_id, Product.store_id == store_id))
     if not product: raise HTTPException(404, "Product not found")
@@ -148,3 +209,15 @@ def reorder_suggestions(user: User = Depends(get_owner_manager), db=Depends(get_
         if eta <= max(7,p.lead_time_days+2) or qty == 0:
             result.append(ReorderSuggestion(product_id=p.id,name=p.name,current_qty=qty,velocity=velocity,lead_time_days=p.lead_time_days,suggested_qty=reorder_quantity(qty,velocity,p.lead_time_days),stockout_eta=eta if math.isfinite(eta) else None))
     return result
+
+@router.get("/intelligence")
+def inventory_intelligence(user: User = Depends(get_current_user), db=Depends(get_db)):
+    return stock_intelligence(db, _store(user))
+
+@router.get("/slow-movers")
+def get_slow_movers(user: User = Depends(get_owner_manager), db=Depends(get_db)):
+    return _slow_movers(db, _store(user))
+
+@router.get("/fast-movers")
+def get_fast_movers(user: User = Depends(get_current_user), db=Depends(get_db)):
+    return _fast_movers(db, _store(user))

@@ -12,7 +12,7 @@ export const API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export const DEMO_CREDENTIALS = {
-  email: "rahul@Green Quant.ai",
+  email: "rahul@greenshop.ai",
   password: "demo1234",
 };
 
@@ -82,7 +82,56 @@ export async function login(
     body: JSON.stringify({ email, password }),
   });
   if (!res.ok) {
-    throw new ApiError(res.status, `Login failed (${res.status})`);
+    let detail = `Login failed (${res.status})`;
+    try {
+      const err = await res.json();
+      if (err.detail) detail = err.detail;
+    } catch {}
+    throw new ApiError(res.status, detail);
+  }
+  const data = (await res.json()) as TokenResponse;
+  writeAuth({ access_token: data.access_token, user: data.user });
+  authPromise = Promise.resolve(true);
+  return data;
+}
+
+/** Log in with Google OAuth token and persist the session. */
+export async function loginWithGoogle(token: string): Promise<TokenResponse> {
+  const res = await rawFetch("/api/auth/google", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) {
+    let detail = `Google login failed (${res.status})`;
+    try {
+      const err = await res.json();
+      if (err.detail) detail = err.detail;
+    } catch {}
+    throw new ApiError(res.status, detail);
+  }
+  const data = (await res.json()) as TokenResponse;
+  writeAuth({ access_token: data.access_token, user: data.user });
+  authPromise = Promise.resolve(true);
+  return data;
+}
+
+/** Register a new user and store, and persist the session. */
+export async function register(
+  payload: { name: string; email: string; password: string; store_name?: string; store_type?: string }
+): Promise<TokenResponse> {
+  const res = await rawFetch("/api/auth/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    let detail = `Registration failed (${res.status})`;
+    try {
+      const err = await res.json();
+      if (err.detail) detail = err.detail;
+    } catch {}
+    throw new ApiError(res.status, detail);
   }
   const data = (await res.json()) as TokenResponse;
   writeAuth({ access_token: data.access_token, user: data.user });
@@ -153,6 +202,33 @@ export async function apiFetch<T>(
     throw new ApiError(res.status, detail || `Request failed (${res.status})`);
   }
   return (await res.json()) as T;
+}
+
+/** Same as apiFetch but returns the raw text body (CSV/plain). */
+export async function apiFetchText(
+  path: string,
+  init: RequestInit = {}
+): Promise<string> {
+  const attempt = async (): Promise<Response> => {
+    const auth = readAuth();
+    const headers: Record<string, string> = {
+      ...(init.headers as Record<string, string> | undefined),
+    };
+    if (auth) headers.Authorization = `Bearer ${auth.access_token}`;
+    return rawFetch(path, { ...init, headers });
+  };
+
+  let res = await attempt();
+  if (res.status === 401) {
+    resetAuth();
+    const ok = await ensureAuth();
+    if (ok) res = await attempt();
+  }
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new ApiError(res.status, detail || `Request failed (${res.status})`);
+  }
+  return res.text();
 }
 
 /** Multipart upload (invoice OCR). Auth header + FormData body. */

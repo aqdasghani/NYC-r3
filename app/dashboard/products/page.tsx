@@ -1,9 +1,10 @@
 "use client";
+import Link from "next/link";
 
 import React, { useState } from "react";
 import { 
   Plus, Search, Edit2, Trash2, Barcode, X, Package, Check, 
-  MoreVertical, Filter, Download
+  MoreVertical, Filter, Download, LineChart
 } from "lucide-react";
 
 // Mock Data
@@ -131,6 +132,9 @@ export default function ProductsPage() {
                       <button className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors">
                         <Trash2 className="w-4 h-4" />
                       </button>
+                      <Link href={`/dashboard/products/${product.id}`} className="p-1.5 text-slate-400 hover:text-brand-green hover:bg-green-50 rounded-md transition-colors" title="Analytics">
+                        <LineChart className="w-4 h-4" />
+                      </Link>
                       <button className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors">
                         <MoreVertical className="w-4 h-4" />
                       </button>

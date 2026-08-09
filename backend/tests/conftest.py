@@ -53,6 +53,13 @@ def manager_headers(client):
 
 
 @pytest.fixture(scope="session")
+def biller_headers(client):
+    r = client.post("/api/auth/login", json={"email": "neha@greenshop.ai", "password": "demo1234"})
+    assert r.status_code == 200, r.text
+    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+
+@pytest.fixture(scope="session")
 def staff_headers(client):
     r = client.post("/api/auth/login", json={"email": "amit@greenshop.ai", "password": "demo1234"})
     assert r.status_code == 200, r.text

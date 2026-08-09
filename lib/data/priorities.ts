@@ -1,3 +1,4 @@
+// OFFLINE FALLBACK — values are intentionally zero. Real data comes from backend.
 import type { Risk } from "@/lib/types";
 
 export const priorities: Risk[] = [
@@ -9,7 +10,7 @@ export const priorities: Risk[] = [
     priority: "URGENT",
     tag: "SELL FIRST",
     reason: "Amul Butter, Britannia Bread, Nestle Milk…",
-    riskValue: 4200,
+    riskValue: 0,
     daysToExpiry: 6,
     suggestedAction: "Sell first — expiry risk",
   },
@@ -21,7 +22,7 @@ export const priorities: Risk[] = [
     priority: "ACTION",
     tag: "APPLY DISCOUNTS",
     reason: "Expiring in 6 days — 15% markdown suggested",
-    riskValue: 9800,
+    riskValue: 0,
     daysToExpiry: 6,
     suggestedAction: "Apply 15% discount",
   },
@@ -44,8 +45,8 @@ export const priorities: Risk[] = [
     batchCode: "B2261",
     priority: "TRANSFER",
     tag: "MOVE STOCK",
-    reason: "₹3,900 potential waste avoided — Store #2 sells 5.1/day",
-    riskValue: 3900,
+    reason: "₹0 potential waste avoided — Store #2 sells 5.1/day",
+    riskValue: 0,
     daysToExpiry: 12,
     suggestedAction: "Transfer excess stock",
   },

@@ -47,11 +47,18 @@ def test_pos_sale_insufficient_stock_409(client, owner_headers):
     assert r.status_code == 409
 
 
-def test_pos_sale_staff_allowed(client, staff_headers):
+def test_pos_sale_biller_allowed(client, biller_headers):
+    barcode = _first_barcode(client, biller_headers)
+    r = client.post("/api/pos/sale", headers=biller_headers,
+                    json={"items": [{"barcode": barcode, "quantity": 1}]})
+    assert r.status_code == 200
+
+
+def test_pos_sale_worker_forbidden(client, staff_headers):
     barcode = _first_barcode(client, staff_headers)
     r = client.post("/api/pos/sale", headers=staff_headers,
                     json={"items": [{"barcode": barcode, "quantity": 1}]})
-    assert r.status_code == 200
+    assert r.status_code == 403
 
 
 def test_sales_transactions_and_trend(client, owner_headers):

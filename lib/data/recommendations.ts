@@ -1,3 +1,4 @@
+// OFFLINE FALLBACK — values are intentionally zero. Real data comes from backend.
 import type { FeaturedRisk, Recommendation } from "@/lib/types";
 
 export const featuredRisk: FeaturedRisk = {
@@ -7,7 +8,7 @@ export const featuredRisk: FeaturedRisk = {
   expiresDays: 6,
   velocity: 3.2,
   estLeftover: 13,
-  riskValue: 5850,
+  riskValue: 0,
 };
 
 export const recommendations: Recommendation[] = [
@@ -17,7 +18,7 @@ export const recommendations: Recommendation[] = [
     title: "Discount 15%",
     description: "Clear ~22 units before expiry — markdown + front-shelf placement.",
     unitsCleared: 22,
-    valueImpact: 4290,
+    valueImpact: 0,
     confidence: 87,
   },
   {
@@ -26,7 +27,7 @@ export const recommendations: Recommendation[] = [
     title: "Transfer 6 → Store #2",
     description: "Store #2 sells 5.1/day — it can absorb this batch faster than you.",
     unitsCleared: 6,
-    valueImpact: 1560,
+    valueImpact: 0,
     confidence: 74,
     toStore: "Store #2",
   },
@@ -36,7 +37,7 @@ export const recommendations: Recommendation[] = [
     title: "Supplier Return",
     description: "Return window closes tomorrow — recover full invoice value.",
     unitsCleared: 0,
-    valueImpact: 1800,
+    valueImpact: 0,
     confidence: 91,
   },
 ];

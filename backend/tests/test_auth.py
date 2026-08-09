@@ -53,10 +53,10 @@ def test_login_unknown_user_401(client):
     assert r.status_code == 401
 
 
-def test_staff_login_has_staff_role(client):
+def test_staff_login_has_worker_role(client):
     r = client.post("/api/auth/login", json={"email": "amit@greenshop.ai", "password": "demo1234"})
     assert r.status_code == 200
-    assert r.json()["user"]["role"] == "STAFF"
+    assert r.json()["user"]["role"] == "WORKER"
 
 
 def test_me_requires_and_returns_user(client, owner_headers):

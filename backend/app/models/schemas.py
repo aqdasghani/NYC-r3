@@ -16,13 +16,17 @@ class RegisterRequest(BaseModel):
     email: str
     phone: Optional[str] = None
     password: str = Field(min_length=6, max_length=128)
-    role: Literal["OWNER", "MANAGER", "STAFF"] = "STAFF"
+    role: Literal["OWNER", "MANAGER", "BILLER", "WORKER", "BILL"] = "WORKER"
     store_name: Optional[str] = None
+    store_type: Optional[str] = None
 
 
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+class GoogleLoginRequest(BaseModel):
+    token: str
 
 
 class UserOut(BaseModel):
@@ -32,6 +36,7 @@ class UserOut(BaseModel):
     name: str
     email: str
     role: str
+    picture_url: Optional[str] = None
     store_id: Optional[uuid.UUID] = None
 
 
@@ -386,6 +391,9 @@ class DashboardKpis(BaseModel):
     expired_count: int
     expired_value: float
     waste_prevented_mtd: float
+    today_revenue: float = 0.0
+    today_orders: int = 0
+    today_units: int = 0
 
 
 class AiPriorityAction(BaseModel):
@@ -472,3 +480,23 @@ class WhatsAppStatusOut(BaseModel):
     configured: bool
     verify_token: str
     phone_id: str
+
+
+# ---------------------------------------------------------------- reports
+
+class MonthlyReportOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    store_id: uuid.UUID
+    month_year: str
+    total_sales: float
+    total_transactions: int
+    waste_prevented_value: float
+    actual_waste_value: float
+    avg_green_score: float
+    top_category: Optional[str] = None
+    top_selling_product: Optional[str] = None
+    summary_json: dict = {}
+    created_at: datetime
+

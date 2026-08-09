@@ -37,8 +37,14 @@ import type {
   ScanInvoiceResponse,
   SupplierOut,
   WastePreventedSeries,
+  HourlySalesPoint,
+  WeeklyComparison,
+  MonthlyComparison,
+  HeatmapRow,
+  InventoryIntelligence,
+  ProductDemand,
 } from "@/lib/backend-types";
-import { apiFetch, apiUpload, ensureAuth } from "@/lib/api-client";
+import { apiFetch, apiFetchText, apiUpload, ensureAuth } from "@/lib/api-client";
 import {
   featuredRisk as mockFeaturedRisk,
   inventory as mockInventory,
@@ -363,7 +369,15 @@ function mockDashboardSummary(): DashboardSummary {
       { name: "Overstock", value: 14, color: "#111827" },
       { name: "Dead Stock", value: 192, color: "#6B7280" },
     ],
-    sales_trend: [],
+    sales_trend: Array.from({ length: 30 }).map((_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (29 - i));
+      return {
+        date: d.toISOString().slice(0, 10),
+        revenue: Math.floor(Math.random() * 5000) + 1000,
+        units: Math.floor(Math.random() * 50) + 10,
+      };
+    }),
     expiry_timeline: [],
     urgent_actions: [],
     ai_priority: {
@@ -529,6 +543,24 @@ export async function getProductByBarcode(code: string): Promise<ProductOut> {
   return apiFetch<ProductOut>(`/api/inventory/barcode/${code}`);
 }
 
+export async function getProduct(id: string): Promise<ProductOut> {
+  return apiFetch<ProductOut>(`/api/inventory/products/${id}`);
+}
+
+export async function getProductDemand(id: string): Promise<ProductDemand> {
+  return liveOr(
+    () => apiFetch<ProductDemand>(`/api/analytics/product/${id}/demand`),
+    () => ({
+      total_revenue_30d: 0,
+      total_units_30d: 0,
+      velocity_per_day: 0,
+      daily_series: [],
+      hourly_pattern: [],
+      dow_pattern: [],
+    })
+  );
+}
+
 /** All inventory batches (used by POS to compute per-product stock). */
 export async function getBatches(): Promise<import("./backend-types").BatchOut[]> {
   return liveOr(() => apiFetch<import("./backend-types").BatchOut[]>("/api/inventory/batches"), () => []);
@@ -557,10 +589,18 @@ export async function getWastePreventedSeries(): Promise<WastePreventedSeries> {
 
 // ================================================================== sales
 
-export async function getSalesTrend(): Promise<SalesTrendPoint[]> {
+export async function getSalesTrend(days: number = 30): Promise<SalesTrendPoint[]> {
   return liveOr(
-    () => apiFetch<SalesTrendPoint[]>("/api/sales/trend?days=30"),
-    () => []
+    () => apiFetch<SalesTrendPoint[]>(`/api/sales/trend?days=${days}`),
+    () => Array.from({ length: days }).map((_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (days - 1 - i));
+      return {
+        date: d.toISOString().slice(0, 10),
+        revenue: Math.floor(Math.random() * 5000) + 1000,
+        units: Math.floor(Math.random() * 50) + 10,
+      };
+    })
   );
 }
 
@@ -581,6 +621,42 @@ export async function getTransactions(): Promise<Transaction[]> {
     },
     () => []
   );
+}
+
+// Hourly sales for a specific date
+export async function getHourlySales(date?: string): Promise<HourlySalesPoint[]> {
+  try {
+    const params = date ? `?target_date=${date}` : '';
+    return await apiFetch(`/api/analytics/hourly${params}`);
+  } catch { return []; }
+}
+
+// Weekly comparison  
+export async function getWeeklyComparison(): Promise<WeeklyComparison | null> {
+  try {
+    return await apiFetch('/api/analytics/weekly');
+  } catch { return null; }
+}
+
+// Monthly comparison
+export async function getMonthlyComparison(): Promise<MonthlyComparison | null> {
+  try {
+    return await apiFetch('/api/analytics/monthly');
+  } catch { return null; }
+}
+
+// Demand heatmap
+export async function getDemandHeatmap(days: number = 30): Promise<HeatmapRow[]> {
+  try {
+    return await apiFetch(`/api/analytics/heatmap?days=${days}`);
+  } catch { return []; }
+}
+
+// Inventory intelligence
+export async function getInventoryIntelligence(): Promise<InventoryIntelligence | null> {
+  try {
+    return await apiFetch('/api/inventory/intelligence');
+  } catch { return null; }
 }
 
 export async function postSale(
@@ -662,5 +738,10 @@ export async function getSuppliers(): Promise<SupplierOut[]> {
 }
 
 // ================================================================ exports
+
+/** Download the current month's report from the backend as CSV text. */
+export async function exportMonthlyReportCSV(): Promise<string> {
+  return apiFetchText("/api/analytics/monthly-report/export-csv");
+}
 
 export type { ExtractedItem };
