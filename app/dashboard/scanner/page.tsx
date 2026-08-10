@@ -3,7 +3,7 @@
 import React, { useRef, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Camera, ScanLine, CheckCircle2, AlertTriangle, Upload, RotateCcw, FileText, QrCode, Search, PackagePlus } from "lucide-react";
-import { confirmReceipt, scanInvoice, getProductByBarcode, getProducts } from "@/lib/api";
+import { confirmReceipt, scanInvoice, getProductByBarcode, getProducts, createProduct } from "@/lib/api";
 import { BarcodeScanner } from "@/components/scanner/BarcodeScanner";
 import type { ExtractedItem, ScanInvoiceResponse, ProductOut } from "@/lib/backend-types";
 import { formatINR } from "@/lib/utils";
@@ -31,6 +31,18 @@ export default function ScannerPage() {
   const [isSearchingBarcode, setIsSearchingBarcode] = useState(false);
   const [manualProducts, setManualProducts] = useState<ProductOut[]>([]);
   
+  // New Product Form State
+  const [notFoundBarcode, setNotFoundBarcode] = useState<string | null>(null);
+  const [newProductName, setNewProductName] = useState("");
+  const [newProductCategory, setNewProductCategory] = useState("");
+  const [newProductPurchasePrice, setNewProductPurchasePrice] = useState<number | "">("");
+  const [newProductSellingPrice, setNewProductSellingPrice] = useState<number | "">("");
+  const [isCreatingProduct, setIsCreatingProduct] = useState(false);
+
+  // Focus Refs
+  const qtyInputRef = useRef<HTMLInputElement>(null);
+  const newProductNameRef = useRef<HTMLInputElement>(null);
+
   // Manual Entry Form State
   const [selectedProductId, setSelectedProductId] = useState<string>("");
   const [manualQty, setManualQty] = useState<number>(1);
@@ -107,16 +119,52 @@ export default function ScannerPage() {
   const handleBarcodeScan = async (code: string) => {
     setIsSearchingBarcode(true);
     setError(null);
+    setNotFoundBarcode(null);
     try {
       const prod = await getProductByBarcode(code);
       setScannedProduct(prod);
       // Pre-fill manual form with product defaults
       setSelectedProductId(prod.id);
       setManualPrice(prod.purchase_price || 0);
+      
+      // Auto-focus quantity input
+      setTimeout(() => qtyInputRef.current?.focus(), 100);
     } catch (err) {
-      setError(`No product found for barcode: ${code}`);
+      setNotFoundBarcode(code);
+      setNewProductName("");
+      setNewProductCategory("");
+      setNewProductPurchasePrice("");
+      setNewProductSellingPrice("");
+      setTimeout(() => newProductNameRef.current?.focus(), 100);
     } finally {
       setIsSearchingBarcode(false);
+    }
+  };
+
+  const handleCreateProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!notFoundBarcode) return;
+    setIsCreatingProduct(true);
+    setError(null);
+    try {
+      const prod = await createProduct({
+        name: newProductName,
+        barcode: notFoundBarcode,
+        category: newProductCategory,
+        purchase_price: Number(newProductPurchasePrice),
+        selling_price: Number(newProductSellingPrice)
+      });
+      setSummary(`Created new product: ${prod.name}`);
+      setScannedProduct(prod);
+      setSelectedProductId(prod.id);
+      setManualPrice(prod.purchase_price || 0);
+      setNotFoundBarcode(null); // hide form
+      
+      setTimeout(() => qtyInputRef.current?.focus(), 100);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create product");
+    } finally {
+      setIsCreatingProduct(false);
     }
   };
 
@@ -164,6 +212,7 @@ export default function ScannerPage() {
     setError(null);
     setSummary(null);
     setScannedProduct(null);
+    setNotFoundBarcode(null);
     if (inputRef.current) inputRef.current.value = "";
   };
 
@@ -380,7 +429,7 @@ export default function ScannerPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">Quantity</label>
-                    <input type="number" value={manualQty} onChange={(e) => setManualQty(Number(e.target.value))} required min={1} className="w-full px-3 py-2 border rounded-md" />
+                    <input ref={qtyInputRef} type="number" value={manualQty} onChange={(e) => setManualQty(Number(e.target.value))} required min={1} className="w-full px-3 py-2 border rounded-md" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">Purchase Price</label>
@@ -396,8 +445,48 @@ export default function ScannerPage() {
                   <input type="date" value={manualExpiry} onChange={(e) => setManualExpiry(e.target.value)} required className="w-full px-3 py-2 border rounded-md" />
                 </div>
                 
-                <button type="submit" disabled={confirming} className="w-full bg-brand-green text-black px-4 py-2 rounded-lg font-bold">
+                <button type="submit" disabled={confirming} className="w-full bg-brand-green text-black px-4 py-2 rounded-lg font-bold hover:bg-brand-green/90 transition-colors disabled:opacity-50">
                   {confirming ? "Saving..." : "Add to Inventory"}
+                </button>
+              </form>
+            ) : notFoundBarcode ? (
+              <form onSubmit={handleCreateProduct} className="glass-panel p-6 space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <PackagePlus className="w-6 h-6 text-brand-green" />
+                  <h3 className="text-xl font-bold text-text-primary">Create New Product</h3>
+                </div>
+                <p className="text-sm text-text-secondary">
+                  Product not found. Enter details to add it to your catalogue.
+                </p>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-text-primary">Barcode</label>
+                  <input type="text" value={notFoundBarcode} disabled className="w-full px-3 py-2 border border-border-default rounded-md bg-bg-surface/50 text-text-muted cursor-not-allowed" />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-text-primary">Product Name</label>
+                  <input ref={newProductNameRef} type="text" value={newProductName} onChange={(e) => setNewProductName(e.target.value)} required className="w-full px-3 py-2 border border-border-default rounded-md" />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-text-primary">Category</label>
+                  <input type="text" value={newProductCategory} onChange={(e) => setNewProductCategory(e.target.value)} className="w-full px-3 py-2 border border-border-default rounded-md" />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-text-primary">Purchase Price (₹)</label>
+                    <input type="number" step="0.01" value={newProductPurchasePrice} onChange={(e) => setNewProductPurchasePrice(e.target.value ? Number(e.target.value) : "")} required className="w-full px-3 py-2 border border-border-default rounded-md" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-text-primary">Selling Price (₹)</label>
+                    <input type="number" step="0.01" value={newProductSellingPrice} onChange={(e) => setNewProductSellingPrice(e.target.value ? Number(e.target.value) : "")} required className="w-full px-3 py-2 border border-border-default rounded-md" />
+                  </div>
+                </div>
+
+                <button type="submit" disabled={isCreatingProduct} className="w-full bg-brand-green text-black px-4 py-2 rounded-lg font-bold hover:bg-brand-green/90 transition-colors disabled:opacity-50">
+                  {isCreatingProduct ? "Creating..." : "Create Product"}
                 </button>
               </form>
             ) : (

@@ -87,7 +87,10 @@ export function Sidebar() {
       <nav className={`flex-1 space-y-1 ${collapsed ? 'px-2' : 'px-3'}`}>
         {navItems.filter(item => {
           if (role === 'WORKER') {
-            return ['Products', 'Sales & POS'].includes(item.name);
+            return ['Procurement', 'Products', 'Inventory'].includes(item.name);
+          }
+          if (role === 'BILLER') {
+            return ['Sales & POS'].includes(item.name);
           }
           return true;
         }).map((item) => {

@@ -1,409 +1,474 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import React, { useState, useEffect, useRef } from "react";
+import { Search, ShoppingBag, Plus, Minus, Trash2, CreditCard, Banknote, Receipt, CheckCircle, Printer, X, Monitor, Camera, ScanLine } from "lucide-react";
 import { getToken } from "@/lib/api-client";
 import { formatINR } from "@/lib/utils";
-import { TrendingUp, TrendingDown, DollarSign, Calendar, Clock, BarChart3, PieChart, Activity } from "lucide-react";
+import { BarcodeScanner } from "@/components/scanner/BarcodeScanner";
 
-type Tab = "Overview" | "Today" | "Hourly" | "Weekly" | "Monthly" | "Heatmap";
-
-interface TrendData {
-  date: string;
-  revenue: number;
-  units: number;
+// Types
+interface Product {
+  id: string;
+  name: string;
+  barcode: string;
+  selling_price: number;
+  gst_rate: number;
+  stock: number;
 }
 
-interface HourlyData {
-  hour: number;
-  revenue: number;
-  units: number;
+interface CartItem {
+  product: Product;
+  quantity: number;
+  discount_type?: "PERCENTAGE" | "FLAT";
+  discount_value?: number;
 }
 
-interface WeeklyData {
-  this_week_revenue: number;
-  last_week_revenue: number;
-  growth_pct: number;
-}
-
-interface MonthlyData {
-  this_month_revenue: number;
-  last_month_revenue: number;
-  growth_pct: number;
-}
-
-const formatHour = (hour: number) => {
-  if (hour === 0) return "12 AM";
-  if (hour < 12) return `${hour} AM`;
-  if (hour === 12) return "12 PM";
-  return `${hour - 12} PM`;
-};
-
-export default function SalesDashboard() {
-  const [activeTab, setActiveTab] = useState<Tab>("Overview");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const [trendData, setTrendData] = useState<TrendData[]>([]);
-  const [hourlyData, setHourlyData] = useState<HourlyData[]>([]);
-  const [weeklyData, setWeeklyData] = useState<WeeklyData | null>(null);
-  const [monthlyData, setMonthlyData] = useState<MonthlyData | null>(null);
-  const [heatmapData, setHeatmapData] = useState<any[][]>([]);
+export default function POSPage() {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState<Product[]>([]);
+  const [cart, setCart] = useState<CartItem[]>([]);
   
-  const [todayRevenue, setTodayRevenue] = useState(0);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
+  
+  // Checkout state
+  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD" | "UPI">("CASH");
+  const [amountPaid, setAmountPaid] = useState<string>("");
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [successInvoice, setSuccessInvoice] = useState<any | null>(null);
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  
+  // Global Barcode Scanner Buffer (for hardware USB scanners)
+  const barcodeBuffer = useRef<string>("");
+  const barcodeTimeout = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const token = getToken();
-        const headers = { Authorization: `Bearer ${token}` };
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+    searchInputRef.current?.focus();
+  }, []);
 
-        // Fetch Dashboard KPIs
-        const dashRes = await fetch(`${baseUrl}/api/analytics/dashboard`, { headers });
-        if (!dashRes.ok) throw new Error("Failed to fetch dashboard data");
-        const dashData = await dashRes.json();
-        
-        // Overview
-        const trendRes = await fetch(`${baseUrl}/api/analytics/sales-trend?days=30`, { headers });
-        if (!trendRes.ok) throw new Error("Failed to fetch trend data");
-        const tData = await trendRes.json();
-        setTrendData(tData);
+  // Global keydown listener for USB Hardware Scanners
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (document.activeElement === searchInputRef.current && e.key !== "Enter") {
+        return;
+      }
+      if (document.activeElement?.tagName === "INPUT" && (document.activeElement as HTMLInputElement).type === "number") {
+        return;
+      }
 
-        // Hourly (Today)
-        const hourlyRes = await fetch(`${baseUrl}/api/analytics/hourly`, { headers });
-        if (!hourlyRes.ok) throw new Error("Failed to fetch hourly data");
-        const hData = await hourlyRes.json();
-        setHourlyData(hData);
-
-        // Weekly
-        const weeklyRes = await fetch(`${baseUrl}/api/analytics/weekly`, { headers });
-        if (!weeklyRes.ok) throw new Error("Failed to fetch weekly data");
-        const wData = await weeklyRes.json();
-        setWeeklyData(wData);
-
-        // Monthly
-        const monthlyRes = await fetch(`${baseUrl}/api/analytics/monthly`, { headers });
-        if (!monthlyRes.ok) throw new Error("Failed to fetch monthly data");
-        const mData = await monthlyRes.json();
-        setMonthlyData(mData);
-
-        if (dashData?.kpis?.today_revenue !== undefined) {
-          setTodayRevenue(dashData.kpis.today_revenue);
-        } else {
-          // fallback: sum from hourly
-          const sum = hData.reduce((acc: number, val: HourlyData) => acc + val.revenue, 0);
-          setTodayRevenue(sum);
+      if (e.key === "Enter") {
+        if (barcodeBuffer.current.length > 3) {
+          e.preventDefault();
+          handleBarcodeScanned(barcodeBuffer.current);
+          barcodeBuffer.current = "";
         }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "An error occurred");
-      } finally {
-        setLoading(false);
+        return;
+      }
+
+      if (e.key.length === 1 && /^[a-zA-Z0-9-]$/.test(e.key)) {
+        barcodeBuffer.current += e.key;
+        if (barcodeTimeout.current) clearTimeout(barcodeTimeout.current);
+        barcodeTimeout.current = setTimeout(() => {
+          barcodeBuffer.current = "";
+        }, 50);
       }
     };
 
-    fetchData();
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleGlobalKeyDown);
+      if (barcodeTimeout.current) clearTimeout(barcodeTimeout.current);
+    };
   }, []);
 
-  useEffect(() => {
-    if (activeTab === "Heatmap" && heatmapData.length === 0) {
-      const fetchHeatmap = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-          const token = getToken();
-          const headers = { Authorization: `Bearer ${token}` };
-          const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
-          const res = await fetch(`${baseUrl}/api/analytics/heatmap`, { headers });
-          if (!res.ok) throw new Error("Failed to fetch heatmap data");
-          const data = await res.json();
-          setHeatmapData(data.matrix || []);
-        } catch (err) {
-          setError(err instanceof Error ? err.message : "An error occurred");
-        } finally {
-          setLoading(false);
-        }
-      };
-      fetchHeatmap();
+  const handleBarcodeScanned = async (code: string) => {
+    setSearchLoading(true);
+    try {
+      const token = getToken();
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+      const res = await fetch(`${baseUrl}/api/inventory/barcode/${code}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const product = await res.json();
+        addToCart(product);
+        setSearchTerm("");
+      } else {
+        alert(`Product not found for barcode: ${code}`);
+      }
+    } catch (err) {
+      console.error("Barcode lookup failed", err);
+    } finally {
+      setSearchLoading(false);
     }
-  }, [activeTab]);
+  };
 
-  const peakHour = hourlyData.length > 0 ? hourlyData.reduce((max, h) => h.revenue > max.revenue ? h : max, hourlyData[0]) : null;
+  // Debounced Search
+  useEffect(() => {
+    const fetchProducts = async () => {
+      if (!searchTerm || searchTerm.length < 2) {
+        setSearchResults([]);
+        return;
+      }
+      setSearchLoading(true);
+      try {
+        const token = getToken();
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+        const res = await fetch(`${baseUrl}/api/inventory/products?search=${encodeURIComponent(searchTerm)}&page_size=10`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data.items || []);
+        }
+      } catch (err) {
+        console.error("Failed to search products", err);
+      } finally {
+        setSearchLoading(false);
+      }
+    };
+    
+    const timeoutId = setTimeout(fetchProducts, 300);
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm]);
+
+  const addToCart = (product: Product) => {
+    setCart(prev => {
+      const existing = prev.find(i => i.product.id === product.id);
+      if (existing) {
+        return prev.map(i => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
+      }
+      return [{ product, quantity: 1 }, ...prev];
+    });
+  };
+
+  const updateQuantity = (productId: string, newQty: number) => {
+    if (newQty < 1 || isNaN(newQty)) return;
+    setCart(prev => prev.map(i => i.product.id === productId ? { ...i, quantity: newQty } : i));
+  };
+
+  const removeItem = (productId: string) => {
+    setCart(prev => prev.filter(i => i.product.id !== productId));
+  };
+
+  // Calculations
+  const subtotal = cart.reduce((acc, item) => acc + (item.product.selling_price * item.quantity), 0);
+  const estimatedTax = cart.reduce((acc, item) => acc + ((item.product.selling_price * item.quantity) * ((item.product.gst_rate || 0) / 100)), 0);
+  const grandTotal = subtotal + estimatedTax;
+
+  const handleCheckout = async () => {
+    if (cart.length === 0) return;
+    
+    setCheckoutLoading(true);
+    try {
+      const token = getToken();
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+      
+      const payload = {
+        payment_method: paymentMethod,
+        amount_paid: amountPaid ? parseFloat(amountPaid) : grandTotal,
+        items: cart.map(i => ({
+          product_id: i.product.id,
+          quantity: i.quantity,
+          discount_type: i.discount_type,
+          discount_value: i.discount_value
+        }))
+      };
+
+      const res = await fetch(`${baseUrl}/api/pos/sale`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}` 
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || "Checkout failed");
+      }
+      
+      const data = await res.json();
+      setSuccessInvoice(data.invoice);
+      setCart([]);
+      setAmountPaid("");
+      setSearchTerm("");
+    } catch (err: any) {
+      alert("Checkout Error: " + err.message);
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  if (successInvoice) {
+    return (
+      <div className="h-full flex items-center justify-center p-6 animate-in fade-in zoom-in duration-300">
+        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full border border-slate-100 relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-2 bg-emerald-500"></div>
+          
+          <div className="text-center mb-6 pt-4">
+            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-8 h-8 text-emerald-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-800 mb-1">Payment Successful</h2>
+            <p className="text-slate-500">Invoice #{successInvoice.invoice_number}</p>
+          </div>
+          
+          <div className="bg-slate-50 rounded-xl p-4 mb-6 border border-slate-100">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-slate-500 font-medium">Grand Total</span>
+              <span className="text-xl font-bold text-slate-800">{formatINR(successInvoice.grand_total)}</span>
+            </div>
+            <div className="flex justify-between items-center text-sm mt-1">
+              <span className="text-slate-500">Amount Paid</span>
+              <span className="text-slate-700 font-medium">{formatINR(successInvoice.amount_paid)}</span>
+            </div>
+          </div>
+          
+          <div className="flex gap-3">
+            <button className="flex-1 bg-white border-2 border-slate-200 text-slate-700 hover:bg-slate-50 font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors">
+              <Printer className="w-5 h-5" />
+              Print
+            </button>
+            <button 
+              onClick={() => {
+                setSuccessInvoice(null);
+                setTimeout(() => searchInputRef.current?.focus(), 100);
+              }}
+              className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-4 rounded-xl transition-colors shadow-lg shadow-emerald-500/20"
+            >
+              New Sale
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-800">Sales Dashboard</h1>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="glass-panel p-4 flex flex-col justify-between">
-          <div className="flex items-center gap-2 mb-2">
-            <DollarSign className="w-4 h-4 text-emerald-500" />
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Today's Revenue</div>
-          </div>
-          {loading ? <div className="h-8 bg-slate-100 animate-pulse rounded w-1/2"></div> : (
-            <div className="text-2xl font-bold text-slate-900">{formatINR(todayRevenue)}</div>
-          )}
-        </div>
-
-        <div className="glass-panel p-4 flex flex-col justify-between">
-          <div className="flex items-center gap-2 mb-2">
-            <Calendar className="w-4 h-4 text-blue-500" />
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">This Week Revenue</div>
-          </div>
-          {loading ? <div className="h-8 bg-slate-100 animate-pulse rounded w-1/2"></div> : (
-            <>
-              <div className="text-2xl font-bold text-slate-900">{formatINR(weeklyData?.this_week_revenue ?? 0)}</div>
-              {weeklyData && (
-                <div className={`text-xs font-medium mt-1 ${weeklyData.growth_pct >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-                  {weeklyData.growth_pct >= 0 ? "↑" : "↓"} {Math.abs(weeklyData.growth_pct).toFixed(1)}% vs last week
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        <div className="glass-panel p-4 flex flex-col justify-between">
-          <div className="flex items-center gap-2 mb-2">
-            <Activity className="w-4 h-4 text-purple-500" />
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">MTD Revenue</div>
-          </div>
-          {loading ? <div className="h-8 bg-slate-100 animate-pulse rounded w-1/2"></div> : (
-            <>
-              <div className="text-2xl font-bold text-slate-900">{formatINR(monthlyData?.this_month_revenue ?? 0)}</div>
-            </>
-          )}
-        </div>
-
-        <div className="glass-panel p-4 flex flex-col justify-between">
-          <div className="flex items-center gap-2 mb-2">
-            {monthlyData && monthlyData.growth_pct >= 0 ? <TrendingUp className="w-4 h-4 text-emerald-500" /> : <TrendingDown className="w-4 h-4 text-red-500" />}
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">MoM Growth</div>
-          </div>
-          {loading ? <div className="h-8 bg-slate-100 animate-pulse rounded w-1/2"></div> : (
-            <>
-              <div className={`text-2xl font-bold ${monthlyData && monthlyData.growth_pct >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-                {monthlyData && monthlyData.growth_pct > 0 ? "+" : ""}{monthlyData?.growth_pct?.toFixed(1) ?? 0}%
+    <div className="h-[calc(100vh-2rem)] flex gap-6">
+      {/* LEFT: Search & Results / Scanner */}
+      <div className="flex-1 flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        {/* Search Bar */}
+        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search by name or type barcode..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-12 pr-10 py-4 bg-white border border-slate-200 rounded-xl text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-sm transition-shadow"
+            />
+            {searchTerm && (
+              <button onClick={() => setSearchTerm("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            )}
+            {searchLoading && (
+              <div className="absolute right-12 top-1/2 -translate-y-1/2">
+                <div className="animate-spin w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full" />
               </div>
-              <div className="text-xs text-slate-500 font-medium mt-1">vs last month</div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-2">
-        {(["Overview", "Today", "Hourly", "Weekly", "Monthly", "Heatmap"] as Tab[]).map(tab => (
+            )}
+          </div>
+          
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`min-w-[44px] min-h-[44px] px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
-              activeTab === tab 
-                ? "bg-slate-900 text-white" 
-                : "bg-white text-slate-600 hover:bg-slate-50 border border-slate-200"
+            onClick={() => setShowCamera(!showCamera)}
+            className={`px-6 py-4 rounded-xl font-bold flex items-center gap-2 transition-colors ${
+              showCamera ? "bg-red-500 text-white hover:bg-red-600" : "bg-[#063120] text-white hover:bg-[#063120]/90"
             }`}
           >
-            {tab}
+            {showCamera ? <ScanLine className="w-5 h-5" /> : <Camera className="w-5 h-5" />}
+            {showCamera ? "Hide Camera" : "Camera"}
           </button>
-        ))}
+        </div>
+
+        {/* Content Area */}
+        <div className="flex-1 p-4 overflow-y-auto bg-slate-50/20 relative">
+          {showCamera && (
+            <div className="mb-6 animate-in fade-in slide-in-from-top-4 duration-300">
+              <div className="bg-slate-900 rounded-2xl p-4 shadow-xl">
+                <BarcodeScanner onScan={handleBarcodeScanned} />
+              </div>
+            </div>
+          )}
+
+          {!showCamera && searchResults.length === 0 && !searchTerm && (
+            <div className="h-full min-h-[300px] flex flex-col items-center justify-center text-slate-400">
+              <Monitor className="w-16 h-16 mb-4 opacity-10" />
+              <p className="font-medium text-slate-500 text-lg">Ready for Next Sale</p>
+              <p className="text-sm mt-1 text-slate-400 text-center max-w-sm">
+                Scan a barcode with your USB scanner,<br/>
+                click "Camera" to scan with your phone,<br/>
+                or type a product name to search.
+              </p>
+            </div>
+          )}
+
+          {searchResults.length > 0 && (
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-12">
+              {searchResults.map(product => (
+                <button
+                  key={product.id}
+                  onClick={() => addToCart(product)}
+                  className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col text-left hover:border-emerald-500 hover:shadow-md transition-all group active:scale-95"
+                >
+                  <div className="text-sm font-semibold text-slate-800 line-clamp-2 mb-1 group-hover:text-emerald-700 transition-colors">
+                    {product.name}
+                  </div>
+                  <div className="text-xs text-slate-400 font-mono mb-3">{product.barcode || 'No Barcode'}</div>
+                  
+                  <div className="mt-auto flex items-end justify-between w-full">
+                    <div className="text-lg font-bold text-slate-900">{formatINR(product.selling_price)}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Tab Content */}
-      <div className="glass-panel p-6">
-        {loading && (
-          <div className="h-64 flex items-center justify-center">
-            <div className="animate-spin w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full" />
+      {/* RIGHT: Cart & Checkout */}
+      <div className="w-[400px] flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden shrink-0">
+        <div className="p-4 border-b border-slate-100 bg-[#063120] text-white flex justify-between items-center">
+          <div className="flex items-center gap-2 font-semibold">
+            <ShoppingBag className="w-5 h-5 text-[#0FA958]" />
+            <span>Current Sale</span>
           </div>
-        )}
-        
-        {!loading && error && (
-          <div className="h-64 flex flex-col items-center justify-center text-center">
-            <div className="w-12 h-12 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-3">
-              <TrendingDown className="w-6 h-6" />
+          <div className="bg-white/10 text-white text-xs px-2.5 py-1 rounded-full font-bold">
+            {cart.length} {cart.length === 1 ? 'Item' : 'Items'}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/30">
+          {cart.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-slate-400">
+              <Receipt className="w-12 h-12 mb-3 opacity-20" />
+              <p className="font-medium text-slate-500">Cart is empty</p>
             </div>
-            <h3 className="text-lg font-semibold text-slate-800">Failed to load data</h3>
-            <p className="text-slate-500">{error}</p>
-          </div>
-        )}
-
-        {!loading && !error && activeTab === "Overview" && (
-          <div>
-            <h3 className="text-lg font-semibold text-slate-800 mb-4">30-Day Sales Trend</h3>
-            {trendData.length === 0 ? (
-              <div className="h-64 flex flex-col items-center justify-center text-center text-slate-500">
-                <BarChart3 className="w-8 h-8 mb-2 opacity-50" />
-                <p>No sales data yet &mdash; make your first sale</p>
-              </div>
-            ) : (
-              <div className="h-[240px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                    <XAxis dataKey="date" tickFormatter={val => val.slice(5)} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} dy={10} />
-                    <YAxis yAxisId="left" axisLine={false} tickLine={false} tickFormatter={v => `₹${v/1000}k`} tick={{ fontSize: 12, fill: '#64748B' }} />
-                    <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} />
-                    <Tooltip 
-                      formatter={(value: any, name: any) => [name === 'revenue' ? formatINR(value) : value, name === 'revenue' ? 'Revenue' : 'Units'] as [string, string]}
-                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-                    />
-                    <Line yAxisId="left" type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
-                    <Line yAxisId="right" type="monotone" dataKey="units" stroke="#3b82f6" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </div>
-        )}
-
-        {!loading && !error && (activeTab === "Today" || activeTab === "Hourly") && (
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-800">Hourly Performance</h3>
-              {activeTab === "Hourly" && peakHour && (
-                <div className="bg-emerald-50 text-emerald-700 text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  Peak: {formatHour(peakHour.hour)} ({formatINR(peakHour.revenue)})
-                </div>
-              )}
-            </div>
-            {hourlyData.length === 0 ? (
-              <div className="h-64 flex flex-col items-center justify-center text-center text-slate-500">
-                <BarChart3 className="w-8 h-8 mb-2 opacity-50" />
-                <p>No sales data yet &mdash; make your first sale</p>
-              </div>
-            ) : (
-              <div className="h-[200px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={hourlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                    <XAxis dataKey="hour" tickFormatter={formatHour} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} dy={10} />
-                    <YAxis axisLine={false} tickLine={false} tickFormatter={v => `₹${v/1000}k`} tick={{ fontSize: 12, fill: '#64748B' }} />
-                    <Tooltip 
-                      formatter={(value: any) => [`₹${value}`, "Amount"] as [string, string]}
-                      labelFormatter={(label: any) => `Hour: ${formatHour(label)}`}
-                      cursor={{ fill: 'rgba(16, 185, 129, 0.1)' }}
-                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-                    />
-                    <Bar dataKey="revenue" fill="#10b981" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </div>
-        )}
-
-        {!loading && !error && activeTab === "Weekly" && (
-          <div>
-            <h3 className="text-lg font-semibold text-slate-800 mb-4">Weekly Comparison</h3>
-            {!weeklyData ? (
-              <div className="h-64 flex flex-col items-center justify-center text-center text-slate-500">
-                <BarChart3 className="w-8 h-8 mb-2 opacity-50" />
-                <p>No sales data yet &mdash; make your first sale</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-slate-50 rounded-xl p-6 border border-slate-100 flex flex-col justify-center items-center text-center">
-                  <div className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">This Week</div>
-                  <div className="text-3xl font-bold text-slate-900">{formatINR(weeklyData.this_week_revenue)}</div>
-                </div>
-                <div className="bg-slate-50 rounded-xl p-6 border border-slate-100 flex flex-col justify-center items-center text-center">
-                  <div className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">Last Week</div>
-                  <div className="text-3xl font-bold text-slate-900">{formatINR(weeklyData.last_week_revenue)}</div>
-                  <div className={`mt-3 inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold ${weeklyData.growth_pct >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                    {weeklyData.growth_pct >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                    {Math.abs(weeklyData.growth_pct).toFixed(1)}% vs Last Week
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {!loading && !error && activeTab === "Monthly" && (
-          <div>
-            <h3 className="text-lg font-semibold text-slate-800 mb-4">Monthly Comparison</h3>
-            {!monthlyData ? (
-              <div className="h-64 flex flex-col items-center justify-center text-center text-slate-500">
-                <BarChart3 className="w-8 h-8 mb-2 opacity-50" />
-                <p>No sales data yet &mdash; make your first sale</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-slate-50 rounded-xl p-6 border border-slate-100 flex flex-col justify-center items-center text-center">
-                  <div className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">This Month</div>
-                  <div className="text-3xl font-bold text-slate-900">{formatINR(monthlyData.this_month_revenue)}</div>
-                </div>
-                <div className="bg-slate-50 rounded-xl p-6 border border-slate-100 flex flex-col justify-center items-center text-center">
-                  <div className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">Last Month</div>
-                  <div className="text-3xl font-bold text-slate-900">{formatINR(monthlyData.last_month_revenue)}</div>
-                  <div className={`mt-3 inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold ${monthlyData.growth_pct >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                    {monthlyData.growth_pct >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                    {Math.abs(monthlyData.growth_pct).toFixed(1)}% vs Last Month
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {!loading && !error && activeTab === "Heatmap" && (
-          <div>
-            <h3 className="text-lg font-semibold text-slate-800 mb-4">Demand Heatmap</h3>
-            {heatmapData.length === 0 ? (
-              <div className="h-64 flex flex-col items-center justify-center text-center text-slate-500">
-                <BarChart3 className="w-8 h-8 mb-2 opacity-50" />
-                <p>No demand data available</p>
-              </div>
-            ) : (
-              <div className="flex flex-col overflow-x-auto">
-                <div className="flex mb-1">
-                  <div className="w-12 shrink-0"></div>
-                  <div className="flex-1 flex justify-between px-1 text-xs text-slate-500">
-                    <span>0</span>
-                    <span>4</span>
-                    <span>8</span>
-                    <span>12</span>
-                    <span>16</span>
-                    <span>20</span>
-                    <span>23</span>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-1">
-                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, dayIdx) => (
-                    <div key={day} className="flex items-center gap-2">
-                      <div className="w-10 shrink-0 text-xs font-medium text-slate-500 text-right">{day}</div>
-                      <div className="flex-1 flex gap-1 h-8">
-                        {heatmapData[dayIdx]?.map((cell: any, hrIdx: number) => {
-                          const intensity = Math.min(1, cell.revenue / 5000); // Normalize assuming 5000 is high
-                          return (
-                            <div
-                              key={hrIdx}
-                              className="flex-1 rounded-sm group relative"
-                              style={{ backgroundColor: `rgba(16, 185, 129, ${Math.max(0.05, intensity)})` }}
-                            >
-                              <div className="opacity-0 group-hover:opacity-100 absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-slate-800 text-white text-xs rounded whitespace-nowrap z-10 pointer-events-none transition-opacity">
-                                {day}, {cell.hour}:00 — ₹{cell.revenue} revenue, {cell.units} units
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+          ) : (
+            cart.map((item) => (
+              <div key={item.product.id} className="bg-white border border-slate-200 rounded-xl p-3 flex flex-col gap-3 animate-in fade-in slide-in-from-right-4 duration-200">
+                <div className="flex justify-between items-start gap-2">
+                  <div className="flex flex-col">
+                    <div className="font-semibold text-sm text-slate-800 leading-tight">
+                      {item.product.name}
                     </div>
-                  ))}
+                    <div className="text-xs text-slate-500 font-mono mt-1">
+                      {item.product.barcode}
+                    </div>
+                  </div>
+                  <div className="font-bold text-slate-900 text-sm whitespace-nowrap">
+                    {formatINR(item.product.selling_price * item.quantity)}
+                  </div>
                 </div>
-                <div className="mt-4 flex items-center justify-end gap-2 text-xs text-slate-500">
-                  <span>Low</span>
-                  <div className="w-24 h-3 rounded-full bg-gradient-to-r from-emerald-50 to-emerald-600"></div>
-                  <span>High</span>
+                
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-mono text-slate-500">
+                    {formatINR(item.product.selling_price)}/pc
+                  </div>
+                  
+                  {/* Quantity Controls */}
+                  <div className="flex items-center bg-slate-100 rounded-lg p-0.5 border border-slate-200">
+                    <button 
+                      onClick={() => {
+                        if (item.quantity === 1) removeItem(item.product.id);
+                        else updateQuantity(item.product.id, item.quantity - 1);
+                      }}
+                      className="w-8 h-8 flex items-center justify-center text-slate-600 hover:bg-white hover:text-red-500 rounded-md transition-colors"
+                    >
+                      {item.quantity === 1 ? <Trash2 className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
+                    </button>
+                    <input
+                      type="number"
+                      min={1}
+                      value={item.quantity}
+                      onChange={(e) => updateQuantity(item.product.id, parseInt(e.target.value) || 1)}
+                      className="w-12 h-8 text-center text-sm font-bold text-slate-800 bg-transparent focus:outline-none focus:bg-white focus:ring-1 focus:ring-emerald-500 rounded-md hide-arrows"
+                    />
+                    <button 
+                      onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
+                      className="w-8 h-8 flex items-center justify-center text-slate-600 hover:bg-white hover:text-emerald-600 rounded-md transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
-            )}
+            ))
+          )}
+        </div>
+
+        <div className="bg-white border-t border-slate-200 p-4 shrink-0 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)]">
+          <div className="space-y-2 mb-4 text-sm">
+            <div className="border-t border-slate-200 pt-3 mt-1 flex justify-between items-end">
+              <span className="text-slate-800 font-bold">Grand Total</span>
+              <span className="text-3xl font-black text-emerald-600 tracking-tight">{formatINR(grandTotal)}</span>
+            </div>
           </div>
-        )}
+
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-2">
+              <button 
+                onClick={() => setPaymentMethod("CASH")}
+                className={`py-2 px-1 rounded-lg border flex flex-col items-center gap-1 transition-colors ${
+                  paymentMethod === "CASH" ? "border-emerald-500 bg-emerald-50 text-emerald-700 font-bold" : "border-slate-200 text-slate-600"
+                }`}
+              >
+                <Banknote className="w-5 h-5" />
+                <span className="text-[10px] font-bold uppercase tracking-wide">Cash</span>
+              </button>
+              <button 
+                onClick={() => setPaymentMethod("CARD")}
+                className={`py-2 px-1 rounded-lg border flex flex-col items-center gap-1 transition-colors ${
+                  paymentMethod === "CARD" ? "border-emerald-500 bg-emerald-50 text-emerald-700 font-bold" : "border-slate-200 text-slate-600"
+                }`}
+              >
+                <CreditCard className="w-5 h-5" />
+                <span className="text-[10px] font-bold uppercase tracking-wide">Card</span>
+              </button>
+              <button 
+                onClick={() => setPaymentMethod("UPI")}
+                className={`py-2 px-1 rounded-lg border flex flex-col items-center gap-1 transition-colors ${
+                  paymentMethod === "UPI" ? "border-emerald-500 bg-emerald-50 text-emerald-700 font-bold" : "border-slate-200 text-slate-600"
+                }`}
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h-2v-6h2v6zm4 0h-2v-6h2v6zm-2-8h-2V7h2v2z"/>
+                </svg>
+                <span className="text-[10px] font-bold uppercase tracking-wide">UPI</span>
+              </button>
+            </div>
+
+            {paymentMethod === "CASH" && (
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-slate-400">₹</span>
+                <input 
+                  type="number" 
+                  placeholder="Amount Tendered" 
+                  value={amountPaid}
+                  onChange={e => setAmountPaid(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-semibold text-slate-800 placeholder:font-normal"
+                />
+              </div>
+            )}
+
+            <button 
+              onClick={handleCheckout}
+              disabled={cart.length === 0 || checkoutLoading}
+              className="w-full py-3.5 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+            >
+              {checkoutLoading ? (
+                <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
+              ) : (
+                <>Charge {formatINR(grandTotal)}</>
+              )}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

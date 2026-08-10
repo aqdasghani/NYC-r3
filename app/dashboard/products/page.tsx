@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { getProducts } from "@/lib/api";
 import type { ProductOut } from "@/lib/backend-types";
+import { BarcodeScanner } from "@/components/scanner/BarcodeScanner";
 
 export default function ProductsPage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -238,33 +239,24 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* Barcode Scanner Modal (Mock) */}
+      {/* Barcode Scanner Modal */}
       {isScannerOpen && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 flex justify-between items-center absolute w-full top-0 z-10">
+            <div className="px-6 py-4 flex justify-between items-center absolute w-full top-0 z-10 pointer-events-none">
               <h3 className="text-white font-bold drop-shadow-md">Scan Barcode</h3>
               <button 
                 onClick={() => setIsScannerOpen(false)}
-                className="p-1.5 text-white hover:bg-white/20 rounded-full transition-colors backdrop-blur-md"
+                className="p-1.5 text-white hover:bg-white/20 rounded-full transition-colors backdrop-blur-md pointer-events-auto"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="relative aspect-square bg-slate-900 flex items-center justify-center overflow-hidden">
-              {/* Mock camera feed */}
-              <div className="absolute inset-0 opacity-20 bg-[url('https://images.unsplash.com/photo-1607344645866-009c320b63e0?auto=format&fit=crop&q=80&w=800')] bg-cover bg-center"></div>
-              
-              {/* Scanning UI overlay */}
-              <div className="relative z-10 w-64 h-64 border-2 border-brand-green/50 rounded-xl flex items-center justify-center">
-                <div className="absolute w-full h-0.5 bg-brand-green top-1/2 -translate-y-1/2 shadow-[0_0_10px_#0FA958] animate-pulse"></div>
-                
-                {/* Corner markers */}
-                <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-brand-green rounded-tl"></div>
-                <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-brand-green rounded-tr"></div>
-                <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-brand-green rounded-bl"></div>
-                <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-brand-green rounded-br"></div>
-              </div>
+            <div className="bg-slate-900 flex items-center justify-center overflow-hidden min-h-[300px] relative">
+              <BarcodeScanner onScan={(code) => {
+                setSearchTerm(code);
+                setIsScannerOpen(false);
+              }} />
             </div>
             <div className="p-6 bg-white text-center">
               <p className="text-sm text-slate-600 mb-4">Position the barcode inside the frame to scan automatically.</p>

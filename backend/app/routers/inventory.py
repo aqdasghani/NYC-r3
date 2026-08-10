@@ -8,6 +8,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 
 from ..deps import get_current_user, get_db, get_owner, get_owner_manager, get_manager_up, get_worker_up
 from ..engines.expiry_engine import classify_batch, expiry_timeline, get_at_risk_batches, stock_health
@@ -50,8 +51,24 @@ def list_products(page: int = 1, page_size: int = Query(50, le=200), search: str
 
 @router.post("/products", response_model=ProductOut)
 def create_product(payload: ProductCreate, user: User = Depends(get_manager_up), db=Depends(get_db)):
-    product = Product(store_id=_store(user), **payload.model_dump())
-    db.add(product); db.commit(); db.refresh(product)
+    store_id = _store(user)
+    
+    if payload.barcode:
+        if db.scalar(select(Product).where(Product.store_id == store_id, Product.barcode == payload.barcode)):
+            raise HTTPException(409, f"Product with barcode {payload.barcode} already exists.")
+            
+    if getattr(payload, "sku", None):
+        if db.scalar(select(Product).where(Product.store_id == store_id, Product.sku == payload.sku)):
+            raise HTTPException(409, f"Product with SKU {payload.sku} already exists.")
+
+    product = Product(store_id=store_id, **payload.model_dump())
+    db.add(product)
+    try:
+        db.commit()
+        db.refresh(product)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "A product with the same unique identifier already exists.")
     return product
 
 
@@ -135,10 +152,27 @@ def get_product_by_barcode(code: str, user: User = Depends(get_current_user), db
 
 @router.patch("/products/{product_id}", response_model=ProductOut)
 def update_product(product_id: uuid.UUID, payload: ProductUpdate, user: User = Depends(get_manager_up), db=Depends(get_db)):
-    product = db.scalar(select(Product).where(Product.id == product_id, Product.store_id == _store(user)))
+    store_id = _store(user)
+    product = db.scalar(select(Product).where(Product.id == product_id, Product.store_id == store_id))
     if not product: raise HTTPException(404, "Product not found")
-    for key, value in payload.model_dump(exclude_unset=True).items(): setattr(product, key, value)
-    db.commit(); db.refresh(product); return product
+    
+    update_data = payload.model_dump(exclude_unset=True)
+    if "barcode" in update_data and update_data["barcode"]:
+        if db.scalar(select(Product).where(Product.store_id == store_id, Product.barcode == update_data["barcode"], Product.id != product_id)):
+            raise HTTPException(409, f"Product with barcode {update_data['barcode']} already exists.")
+            
+    if "sku" in update_data and update_data["sku"]:
+        if db.scalar(select(Product).where(Product.store_id == store_id, Product.sku == update_data["sku"], Product.id != product_id)):
+            raise HTTPException(409, f"Product with SKU {update_data['sku']} already exists.")
+
+    for key, value in update_data.items(): setattr(product, key, value)
+    try:
+        db.commit()
+        db.refresh(product)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "A product with the same unique identifier already exists.")
+    return product
 
 
 @router.delete("/products/{product_id}", response_model=MessageOut)

@@ -55,3 +55,11 @@ def test_confirm_rejects_unknown_product(client, owner_headers):
 def test_scan_worker_allowed(client, staff_headers):
     r = _scan(client, staff_headers)
     assert r.status_code != 403
+
+
+def test_date_parsing_formats():
+    from app.utils.expiry_parser import _parse_date
+    assert _parse_date("14/08/2026") == date(2026, 8, 14)
+    assert _parse_date("08/14/2026") == date(2026, 8, 14)
+    assert _parse_date("08-14-2026") == date(2026, 8, 14)
+

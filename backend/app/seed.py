@@ -122,10 +122,13 @@ def _pick_name(rng: random.Random, category: str, used: set[str]) -> str:
 def seed_if_empty(db: Session | None = None) -> dict:
     """Idempotent entry point called from the app lifespan. No-op if users exist."""
     session = db or _session()
+def seed_if_empty(db: Session | None = None, seed_synthetic_data: bool = False) -> dict:
+    """Seed base stores and users. Only seeds synthetic mock data if seed_synthetic_data is True."""
+    session = db or _session()
     try:
         if session.scalar(select(User.id).limit(1)):
             return {"seeded": False, "reason": "users already exist"}
-        summary = _run_seed(session)
+        summary = _run_seed(session, seed_synthetic_data=seed_synthetic_data)
         session.commit()
         return {"seeded": True, **summary}
     except Exception:
@@ -141,7 +144,7 @@ def _session() -> Session:
     return SessionLocal()
 
 
-def _run_seed(db: Session) -> dict:
+def _run_seed(db: Session, seed_synthetic_data: bool = False) -> dict:
     rng = random.Random(42)
     today = date.today()
 
@@ -186,9 +189,18 @@ def _run_seed(db: Session) -> dict:
     db.add_all(suppliers)
     db.flush()
 
-    # --- products --------------------------------------------------------
     products: list[Product] = []
     batches: list[InventoryBatch] = []
+    sale_rows: list[SaleItem] = []
+    rec_specs: list = []
+    waste_values: list = []
+
+    if not seed_synthetic_data:
+        return {
+            "stores": 2, "users": len(users), "suppliers": len(suppliers),
+            "products": 0, "batches": 0, "sales": 0,
+            "recommendations": 0, "waste_events": 0,
+        }
     used_names: set[str] = set()
     product_count = max(5, settings.SEED_PRODUCT_COUNT)
 

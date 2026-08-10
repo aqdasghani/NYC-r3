@@ -7,27 +7,30 @@ import Link from "next/link";
 import { Sparkles, Brain, Leaf, AlertTriangle, ArrowRightLeft, TrendingUp, CheckCircle2, ChevronRight, Zap, BarChart, Package, Clock, ShoppingCart } from "lucide-react";
 import { formatINR } from "@/lib/utils";
 import { useDashboardData } from "@/lib/hooks/useDashboardData";
-import { getActions, getInventoryIntelligence, getWeeklyComparison } from "@/lib/api";
-import type { ActionOut, InventoryIntelligence, WeeklyComparison } from "@/lib/backend-types";
+import { getActions, getInventoryIntelligence, getWeeklyComparison, getBriefing } from "@/lib/api";
+import type { ActionOut, InventoryIntelligence, WeeklyComparison, DailyBrief } from "@/lib/backend-types";
 
 function BriefingPageContent() {
   const { summary, loading } = useDashboardData();
   const [actions, setActions] = useState<ActionOut[]>([]);
   const [invIntel, setInvIntel] = useState<InventoryIntelligence | null>(null);
   const [weekly, setWeekly] = useState<WeeklyComparison | null>(null);
+  const [briefing, setBriefing] = useState<DailyBrief | null>(null);
 
   useEffect(() => {
     async function loadData() {
-      const [actionsRes, invRes, weeklyRes] = await Promise.all([
+      const [actionsRes, invRes, weeklyRes, briefRes] = await Promise.all([
         getActions("PENDING"),
         getInventoryIntelligence(),
-        getWeeklyComparison()
+        getWeeklyComparison(),
+        getBriefing()
       ]);
       // Sort actions by value_at_risk descending and take top 5
       const sorted = actionsRes.sort((a, b) => (b.value_at_risk || 0) - (a.value_at_risk || 0)).slice(0, 5);
       setActions(sorted);
       setInvIntel(invRes);
       setWeekly(weeklyRes);
+      setBriefing(briefRes);
     }
     loadData();
   }, []);
@@ -66,7 +69,7 @@ function BriefingPageContent() {
             <h3 className="font-bold text-lg">Good Morning, Store Owner 🌱</h3>
           </div>
           <p className="text-sm text-slate-300 leading-relaxed">
-            Here is your daily store briefing. We've detected important inventory insights and sales trends to start your day effectively.
+            Here is your daily store briefing. {briefing ? `You have ${briefing.important_actions} important actions pending, with an estimated impact of ₹${briefing.est_impact.toLocaleString('en-IN')}.` : "We've detected important inventory insights and sales trends to start your day effectively."}
           </p>
         </div>
       </div>

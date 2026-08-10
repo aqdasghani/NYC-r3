@@ -63,8 +63,8 @@ def require_roles(*roles: str):
 get_owner_manager = require_roles("OWNER", "MANAGER")
 get_owner = require_roles("OWNER")
 get_manager_up = require_roles("OWNER", "MANAGER")
-get_biller_up = require_roles("OWNER", "MANAGER", "BILLER")
-get_worker_up = require_roles("OWNER", "MANAGER", "BILLER", "WORKER")
+get_biller_up = require_roles("OWNER", "MANAGER", "BILLER", "BILL")
+get_worker_up = require_roles("OWNER", "MANAGER", "BILLER", "WORKER", "BILL")
 
 # Staff are allowed AI reads but not financials / not executions.
 STAFF_FINANCIAL_KEYS = {"value_at_risk", "value_locked", "sale_price", "gst_amount", "purchase_price", "price"}

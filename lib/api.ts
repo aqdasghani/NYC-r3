@@ -299,18 +299,56 @@ function greenScoreToScoreData(gs: GreenScoreOut, delta: number): ScoreData {
   };
 }
 
+// ================================================================ empty states (production fallback — never mock)
+
+function emptyKpis(): KPI[] {
+  return [
+    { id: "inv_value", label: "Inventory Value", value: 0, unit: "inr", deltaPct: 0, spark: [], icon: "📦", accent: "accent" },
+    { id: "total_products", label: "Total Products", value: 0, unit: "number", deltaPct: 0, spark: [], icon: "🏷️", accent: "ink" },
+    { id: "at_risk", label: "At Risk", value: 0, unit: "inr", deltaPct: 0, spark: [], icon: "⚠️", accent: "warning" },
+    { id: "waste_prevented", label: "Waste Prevented", value: 0, unit: "inr", deltaPct: 0, spark: [], icon: "🌱", accent: "safe" },
+  ];
+}
+
+function emptyScoreData(): ScoreData {
+  return {
+    score: 0,
+    delta: 0,
+    categories: [
+      { id: "expiry_prevention", label: "Expiry Prevention", value: 0, weight: 0.3, tint: "accent" },
+      { id: "inventory_eff", label: "Inventory Eff.", value: 0, weight: 0.3, tint: "info" },
+      { id: "dead_stock", label: "Dead Stock", value: 0, weight: 0.2, tint: "warning" },
+      { id: "waste_prevention", label: "Waste Prevented", value: 0, weight: 0.2, tint: "safe" },
+    ],
+  };
+}
+
 // ================================================================ helpers
 
+function isDemoMode(): boolean {
+  if (typeof window === "undefined") return false;
+  return (
+    window.location.pathname.startsWith("/demo") ||
+    window.location.search.includes("demo=true") ||
+    localStorage.getItem("app_mode") === "demo"
+  );
+}
+
 /**
- * Run a live backend call, falling back to `fallback` when auth or the request
- * fails (backend down, 5xx, network error). Keeps the UI functional as a demo.
+ * Run a live backend call. If unreachable or unauthenticated:
+ * - Uses demo dataset if in Demo mode (/demo or ?demo=true)
+ * - Returns clean empty state in Production mode to prevent mock data leakage.
  */
-async function liveOr<T>(live: () => Promise<T>, fallback: () => T): Promise<T> {
+async function liveOr<T>(live: () => Promise<T>, fallback: () => T, emptyFallback?: () => T): Promise<T> {
+  const getFallback = () => {
+    if (isDemoMode()) return fallback();
+    return emptyFallback ? emptyFallback() : fallback();
+  };
   try {
-    if (!(await ensureAuth())) return fallback();
+    if (!(await ensureAuth())) return getFallback();
     return await live();
   } catch {
-    return fallback();
+    return getFallback();
   }
 }
 
@@ -339,78 +377,57 @@ export async function getDashboardData(): Promise<DashboardData> {
       const score = await fetchGreenScore();
       return { kpis: kpiFromSummary(summary), priorities: pending, score };
     },
-    () => ({ kpis: mockKpis, priorities: mockPriorities, score: mockScoreData })
+    () => ({ kpis: mockKpis, priorities: mockPriorities, score: mockScoreData }),
+    () => ({ kpis: emptyKpis(), priorities: [], score: emptyScoreData() })
   );
 }
 
-/** Offline-safe reconstruction of the backend aggregate from the demo dataset. */
+/** Offline-safe reconstruction returning zero/empty states. */
 function mockDashboardSummary(): DashboardSummary {
-  const inv = mockKpis[0];
-  const products = mockKpis[1];
-  const atRisk = mockKpis[2];
-  const waste = mockKpis[3];
-  const s = mockScoreData;
+  return emptyDashboardSummary();
+}
+
+function emptyDashboardSummary(): DashboardSummary {
   return {
     kpis: {
-      inventory_value: inv.value,
-      inventory_value_delta_pct: inv.deltaPct,
-      product_count: products.value,
-      product_count_delta_pct: products.deltaPct,
-      at_risk_count: 37,
-      at_risk_value: atRisk.value,
-      expired_count: 8,
-      expired_value: 2160,
-      waste_prevented_mtd: waste.value,
+      inventory_value: 0,
+      inventory_value_delta_pct: 0,
+      product_count: 0,
+      product_count_delta_pct: 0,
+      at_risk_count: 0,
+      at_risk_value: 0,
+      expired_count: 0,
+      expired_value: 0,
+      waste_prevented_mtd: 0,
+      today_revenue: 0,
+      today_orders: 0,
+      today_units: 0,
     },
-    donut: [
-      { name: "Good Stock", value: 1012, color: "#10B981" },
-      { name: "Near Expiry", value: 37, color: "#F59E0B" },
-      { name: "Expired", value: 8, color: "#EF4444" },
-      { name: "Low Stock", value: 21, color: "#3B82F6" },
-      { name: "Overstock", value: 14, color: "#111827" },
-      { name: "Dead Stock", value: 192, color: "#6B7280" },
-    ],
-    sales_trend: Array.from({ length: 30 }).map((_, i) => {
-      const d = new Date();
-      d.setDate(d.getDate() - (29 - i));
-      return {
-        date: d.toISOString().slice(0, 10),
-        revenue: Math.floor(Math.random() * 5000) + 1000,
-        units: Math.floor(Math.random() * 50) + 10,
-      };
-    }),
+    donut: [],
+    sales_trend: [],
     expiry_timeline: [],
     urgent_actions: [],
     ai_priority: {
-      sell_first: { products: 12, units: 37, value: 4200 },
-      discount: { products: 7, units: 0, value: 2840 },
-      transfer: { products: 0, units: 18, value: 3900 },
-      reorder: { products: 7, units: 0, value: 0 },
+      sell_first: { products: 0, units: 0, value: 0 },
+      discount: { products: 0, units: 0, value: 0 },
+      transfer: { products: 0, units: 0, value: 0 },
+      reorder: { products: 0, units: 0, value: 0 },
     },
-    ai_insights: [
-      { title: "OVERSTOCK_DETECTED", detail: "5.8 months inventory. Reduce next purchase.", icon: "Package" },
-      { title: "DEMAND_SPIKE", detail: "Lays sales +37% this week.", icon: "TrendingUp" },
-      { title: "WASTE_PRV", detail: "Prevented ₹7,240 potential waste.", icon: "Leaf" },
-    ],
-    mini_kpis: { suppliers: 24, purchase_orders: 12, grn_pending: 5, avg_gross_margin: 18.6 },
+    ai_insights: [],
+    mini_kpis: { suppliers: 0, purchase_orders: 0, grn_pending: 0, avg_gross_margin: 0 },
     green_score: {
-      score: s.score,
-      expiry_score: s.categories[0]?.value ?? s.score,
-      inventory_score: s.categories[1]?.value ?? s.score,
-      dead_stock_score: s.categories[2]?.value ?? s.score,
-      waste_score: s.categories[3]?.value ?? s.score,
-      breakdown: s.categories.map((c) => ({ name: c.label, weight: c.weight, value: c.value, note: "" })),
+      score: 0,
+      expiry_score: 0,
+      inventory_score: 0,
+      dead_stock_score: 0,
+      waste_score: 0,
+      breakdown: [],
       period_date: new Date().toISOString().slice(0, 10),
     },
     daily_brief: {
-      important_actions: 5,
-      est_impact: 3200,
-      sections: [
-        { title: "Urgent", count: 2 },
-        { title: "Action", count: 5 },
-        { title: "Procurement", count: 1 },
-        { title: "Sustainability", count: 7240 },
-      ],
+      important_actions: 0,
+      est_impact: 0,
+      sections: [],
     },
   };
 }
@@ -419,7 +436,8 @@ function mockDashboardSummary(): DashboardSummary {
 export async function getDashboardSummary(): Promise<DashboardSummary> {
   return liveOr(
     () => apiFetch<DashboardSummary>("/api/analytics/dashboard"),
-    mockDashboardSummary
+    mockDashboardSummary,
+    emptyDashboardSummary
   );
 }
 
@@ -544,6 +562,19 @@ export async function getProductByBarcode(code: string): Promise<ProductOut> {
   return apiFetch<ProductOut>(`/api/inventory/barcode/${code}`);
 }
 
+export async function createProduct(data: {
+  name: string;
+  barcode?: string;
+  category?: string;
+  purchase_price?: number;
+  selling_price?: number;
+}): Promise<ProductOut> {
+  return apiFetch<ProductOut>("/api/inventory/products", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
 export async function getProduct(id: string): Promise<ProductOut> {
   return apiFetch<ProductOut>(`/api/inventory/products/${id}`);
 }
@@ -593,15 +624,8 @@ export async function getWastePreventedSeries(): Promise<WastePreventedSeries> {
 export async function getSalesTrend(days: number = 30): Promise<SalesTrendPoint[]> {
   return liveOr(
     () => apiFetch<SalesTrendPoint[]>(`/api/sales/trend?days=${days}`),
-    () => Array.from({ length: days }).map((_, i) => {
-      const d = new Date();
-      d.setDate(d.getDate() - (days - 1 - i));
-      return {
-        date: d.toISOString().slice(0, 10),
-        revenue: Math.floor(Math.random() * 5000) + 1000,
-        units: Math.floor(Math.random() * 50) + 10,
-      };
-    })
+    () => [], // Demo mode: also return empty — real demo data comes from backend seed
+    () => [] // Production mode: empty array = "No sales data yet" shown in UI
   );
 }
 
@@ -758,11 +782,20 @@ export async function getGreenScoreCurrent(): Promise<GreenScoreOut> {
   return liveOr(
     () => apiFetch<GreenScoreOut>("/api/green-score/current"),
     () => ({
-      score: 84,
-      expiry_score: 80,
-      inventory_score: 85,
-      dead_stock_score: 82,
-      waste_score: 88,
+      score: 0,
+      expiry_score: 0,
+      inventory_score: 0,
+      dead_stock_score: 0,
+      waste_score: 0,
+      breakdown: [],
+      period_date: new Date().toISOString().slice(0, 10),
+    }),
+    () => ({
+      score: 0,
+      expiry_score: 0,
+      inventory_score: 0,
+      dead_stock_score: 0,
+      waste_score: 0,
       breakdown: [],
       period_date: new Date().toISOString().slice(0, 10),
     })
@@ -775,3 +808,36 @@ export async function getGreenScoreHistory(days: number = 30): Promise<GreenScor
     () => []
   );
 }
+
+export async function getPurchaseOrders(): Promise<any[]> {
+  return liveOr(
+    () => apiFetch<any[]>("/api/purchase-orders"),
+    () => []
+  );
+}
+
+export async function getTransfers(): Promise<any[]> {
+  return liveOr(
+    () => apiFetch<any[]>("/api/transfers"),
+    () => []
+  );
+}
+
+export async function getReturns(): Promise<any[]> {
+  return liveOr(
+    () => apiFetch<any[]>("/api/returns"),
+    () => []
+  );
+}
+
+export async function getBriefing(): Promise<import("./backend-types").DailyBrief> {
+  return liveOr(
+    () => apiFetch<import("./backend-types").DailyBrief>("/api/analytics/briefing"),
+    () => ({
+      important_actions: 0,
+      est_impact: 0,
+      sections: []
+    })
+  );
+}
+

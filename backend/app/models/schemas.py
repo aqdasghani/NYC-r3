@@ -179,38 +179,63 @@ class PosSaleItem(BaseModel):
     product_id: Optional[uuid.UUID] = None
     barcode: Optional[str] = None
     quantity: int = Field(gt=0)
+    discount_type: Optional[Literal["PERCENTAGE", "FLAT"]] = None
+    discount_value: Optional[float] = None
 
 
 class PosSaleRequest(BaseModel):
     items: list[PosSaleItem]
     customer_id: Optional[uuid.UUID] = None
     pos_session_id: Optional[uuid.UUID] = None
+    payment_method: str = "Cash"
+    amount_paid: Optional[float] = None
+    cart_discount_type: Optional[Literal["PERCENTAGE", "FLAT"]] = None
+    cart_discount_value: Optional[float] = None
 
 
-class ReceiptLine(BaseModel):
+class InvoiceLineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
     product_id: uuid.UUID
-    name: str
-    batch_id: uuid.UUID
-    batch_number: Optional[str] = None
-    qty: int
-    unit_price: float
+    product_name_snapshot: str
+    sku_snapshot: Optional[str] = None
+    barcode_snapshot: Optional[str] = None
+    quantity: int
+    unit: str
+    mrp: float
+    selling_price: float
+    discount_type: Optional[str] = None
+    discount_value: Optional[float] = None
+    discount_amount: float
+    taxable_amount: float
     gst_rate: float
     gst_amount: float
-    line_total: float
+    total_amount: float
 
 
-class Receipt(BaseModel):
-    receipt_no: str
+class InvoiceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    invoice_number: str
     store_id: uuid.UUID
-    lines: list[ReceiptLine]
+    cashier_id: uuid.UUID
+    customer_id: Optional[uuid.UUID] = None
     subtotal: float
-    gst_total: float
+    total_mrp: float
+    total_discount: float
+    total_gst: float
     grand_total: float
-    timestamp: datetime
+    amount_paid: float
+    change_amount: float
+    payment_method: str
+    created_at: datetime
+    items: list[InvoiceLineOut] = []
 
 
 class PosSaleResponse(BaseModel):
-    receipt: Receipt
+    invoice: InvoiceOut
 
 
 class SaleOut(BaseModel):
@@ -498,5 +523,217 @@ class MonthlyReportOut(BaseModel):
     top_category: Optional[str] = None
     top_selling_product: Optional[str] = None
     summary_json: dict = {}
+    created_at: datetime
+
+
+# ---------------------------------------------------------------- new schemas
+
+class CustomerCreate(BaseModel):
+    name: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    loyalty_points: int = 0
+
+
+class CustomerUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    loyalty_points: Optional[int] = None
+
+
+class CustomerOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    store_id: uuid.UUID
+    name: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    loyalty_points: int
+    created_at: datetime
+
+
+class PurchaseOrderCreate(BaseModel):
+    supplier_id: uuid.UUID
+    status: str = "DRAFT"
+    total_amount: Optional[float] = None
+    expected_delivery_date: Optional[date] = None
+
+
+class PurchaseOrderUpdate(BaseModel):
+    supplier_id: Optional[uuid.UUID] = None
+    status: Optional[str] = None
+    total_amount: Optional[float] = None
+    expected_delivery_date: Optional[date] = None
+
+
+class PurchaseOrderOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    store_id: uuid.UUID
+    supplier_id: uuid.UUID
+    status: str
+    total_amount: Optional[float] = None
+    expected_delivery_date: Optional[date] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class PurchaseOrderItemCreate(BaseModel):
+    po_id: uuid.UUID
+    product_id: uuid.UUID
+    quantity: int = 1
+    unit_price: Optional[float] = None
+    received_quantity: int = 0
+
+
+class PurchaseOrderItemUpdate(BaseModel):
+    po_id: Optional[uuid.UUID] = None
+    product_id: Optional[uuid.UUID] = None
+    quantity: Optional[int] = None
+    unit_price: Optional[float] = None
+    received_quantity: Optional[int] = None
+
+
+class PurchaseOrderItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    po_id: uuid.UUID
+    product_id: uuid.UUID
+    quantity: int
+    unit_price: Optional[float] = None
+    received_quantity: int
+
+
+class StockTransferCreate(BaseModel):
+    destination_store_id: uuid.UUID
+    status: str = "PENDING"
+
+
+class StockTransferUpdate(BaseModel):
+    destination_store_id: Optional[uuid.UUID] = None
+    status: Optional[str] = None
+
+
+class StockTransferOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    source_store_id: uuid.UUID
+    destination_store_id: uuid.UUID
+    status: str
+    transfer_date: datetime
+    created_at: datetime
+
+
+class StockTransferItemCreate(BaseModel):
+    transfer_id: uuid.UUID
+    product_id: uuid.UUID
+    batch_id: Optional[uuid.UUID] = None
+    quantity: int = 1
+
+
+class StockTransferItemUpdate(BaseModel):
+    transfer_id: Optional[uuid.UUID] = None
+    product_id: Optional[uuid.UUID] = None
+    batch_id: Optional[uuid.UUID] = None
+    quantity: Optional[int] = None
+
+
+class StockTransferItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    transfer_id: uuid.UUID
+    product_id: uuid.UUID
+    batch_id: Optional[uuid.UUID] = None
+    quantity: int
+
+
+class ReturnCreate(BaseModel):
+    customer_id: Optional[uuid.UUID] = None
+    sale_id: Optional[uuid.UUID] = None
+    total_refund: float = 0.0
+    reason: Optional[str] = None
+
+
+class ReturnUpdate(BaseModel):
+    customer_id: Optional[uuid.UUID] = None
+    sale_id: Optional[uuid.UUID] = None
+    total_refund: Optional[float] = None
+    reason: Optional[str] = None
+
+
+class ReturnOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    store_id: uuid.UUID
+    customer_id: Optional[uuid.UUID] = None
+    sale_id: Optional[uuid.UUID] = None
+    total_refund: float
+    reason: Optional[str] = None
+    return_date: datetime
+
+
+class ReturnItemCreate(BaseModel):
+    return_id: uuid.UUID
+    product_id: uuid.UUID
+    batch_id: Optional[uuid.UUID] = None
+    quantity: int = 1
+    refund_amount: float = 0.0
+    condition: str = "SELLABLE"
+
+
+class ReturnItemUpdate(BaseModel):
+    return_id: Optional[uuid.UUID] = None
+    product_id: Optional[uuid.UUID] = None
+    batch_id: Optional[uuid.UUID] = None
+    quantity: Optional[int] = None
+    refund_amount: Optional[float] = None
+    condition: Optional[str] = None
+
+
+class ReturnItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    return_id: uuid.UUID
+    product_id: uuid.UUID
+    batch_id: Optional[uuid.UUID] = None
+    quantity: int
+    refund_amount: float
+    condition: str
+
+
+class AuditLogCreate(BaseModel):
+    user_id: Optional[uuid.UUID] = None
+    action: str
+    entity_type: str
+    entity_id: uuid.UUID
+    details: dict = {}
+
+
+class AuditLogUpdate(BaseModel):
+    user_id: Optional[uuid.UUID] = None
+    action: Optional[str] = None
+    entity_type: Optional[str] = None
+    entity_id: Optional[uuid.UUID] = None
+    details: Optional[dict] = None
+
+
+class AuditLogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    store_id: uuid.UUID
+    user_id: Optional[uuid.UUID] = None
+    action: str
+    entity_type: str
+    entity_id: uuid.UUID
+    details: dict
     created_at: datetime
 

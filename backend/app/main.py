@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .models.database import create_all
-from .routers import ai_actions, analytics, auth, green_score, inventory, receiving, sales, suppliers, whatsapp, ws
+from .routers import ai_actions, analytics, auth, demo, green_score, inventory, procurement, receiving, returns, sales, suppliers, transfers, whatsapp, ws
 from .scheduler import shutdown as scheduler_shutdown
 from .scheduler import set_loop, start as start_scheduler
 from .seed import seed_if_empty
@@ -24,7 +24,7 @@ _loop: asyncio.AbstractEventLoop | None = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_all()
-    seed_result = seed_if_empty()
+    seed_result = seed_if_empty(seed_synthetic_data=settings.SEED_WITH_SYNTHETIC_DATA)
     if seed_result.get("seeded"):
         print(f"[GreenShop AI] Seeded demo data: {seed_result}")
     global _loop
@@ -52,6 +52,7 @@ app.add_middleware(
 
 # API routers (all under /api/*)
 app.include_router(auth.router)
+app.include_router(demo.router)
 app.include_router(inventory.router)
 app.include_router(sales.router)
 app.include_router(receiving.router)
@@ -60,6 +61,9 @@ app.include_router(ai_actions.router)
 app.include_router(green_score.router)
 app.include_router(analytics.router)
 app.include_router(whatsapp.router)
+app.include_router(procurement.router)
+app.include_router(transfers.router)
+app.include_router(returns.router)
 
 # WebSocket channel (no /api prefix — browsers can't set headers on WS upgrade)
 app.include_router(ws.router)

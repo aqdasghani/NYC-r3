@@ -44,19 +44,16 @@ export function TopHeader() {
         </div>
 
         <div className="hidden md:flex items-center text-sm font-medium text-slate-500">
-          May 28, 2025 • 9:30 AM
+          {new Date().toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}
         </div>
 
         <div className="flex items-center gap-4">
-          <button className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors">
+          <button className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors" aria-label="Notifications">
             <Bell className="w-5 h-5" />
-            <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white flex items-center justify-center">
-              <span className="text-[8px] font-bold text-white leading-none absolute -top-1 -right-1">5</span>
-            </span>
           </button>
 
           <div className="flex items-center gap-3 cursor-pointer pl-4 border-l border-slate-200">
-            <div className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-sm">
+            <div className="w-8 h-8 rounded-full bg-[#063120] text-white flex items-center justify-center font-bold text-sm">
               {userInitials}
             </div>
             <div className="hidden md:block text-left">

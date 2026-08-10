@@ -6,17 +6,7 @@ import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { ShoppingCart, Plus, FileText, Search, TrendingUp, Filter, Check, ShieldAlert, CheckCircle2 } from "lucide-react";
 
-// Mock Data
-const AUTO_REORDERS = [
-  { id: "AR1", product: "Organic Apples", suggestedQty: 100, supplier: "Fresh Farms Inc.", confidence: 95, status: "Pending" },
-  { id: "AR2", product: "Almond Milk 1L", suggestedQty: 48, supplier: "Dairy Alternatives Co.", confidence: 88, status: "Approved" },
-];
-
-const RECENT_POS = [
-  { id: "PO-2023-089", supplier: "Global Distributors", date: "Today", amount: "₹45,200", status: "In Transit" },
-  { id: "PO-2023-088", supplier: "Fresh Farms Inc.", date: "Yesterday", amount: "₹12,450", status: "Delivered" },
-  { id: "PO-2023-087", supplier: "Dairy Alternatives Co.", date: "Aug 06", amount: "₹8,900", status: "Processing" },
-];
+// Mock Data removed - using real API data
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -28,9 +18,34 @@ const itemVariants = {
   show: { opacity: 1, y: 0, transition: { duration: 0.4 } },
 };
 
+import { apiFetch } from "@/lib/api-client";
+
 function ProcurementPageContent() {
   const [showForm, setShowForm] = useState(false);
   const [items, setItems] = useState<{ id: string, name: string, qty: number, price: number }[]>([]);
+  
+  const [recentPos, setRecentPos] = useState<any[]>([]);
+  const [autoReorders, setAutoReorders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    async function loadData() {
+      try {
+        const pos = await apiFetch<any[]>("/api/procurement/orders");
+        setRecentPos(pos || []);
+      } catch (e) {
+        setRecentPos([]);
+      }
+      try {
+        const reorders = await apiFetch<any[]>("/api/procurement/suggestions");
+        setAutoReorders(reorders || []);
+      } catch (e) {
+        setAutoReorders([]);
+      }
+      setLoading(false);
+    }
+    loadData();
+  }, []);
   
   return (
     <motion.div variants={containerVariants} initial="hidden" animate="show" className="space-y-6 max-w-6xl mx-auto">
@@ -136,17 +151,22 @@ function ProcurementPageContent() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="glass-panel p-4">
                 <div className="text-sm font-medium text-text-secondary mb-1">Active POs</div>
-                <div className="text-2xl font-bold text-text-primary">12</div>
-                <div className="text-xs text-brand-green mt-2 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> +2 this week</div>
+                <div className="text-2xl font-bold text-text-primary">{loading ? "-" : recentPos.length}</div>
+                <div className="text-xs text-brand-green mt-2 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Live Data</div>
               </div>
               <div className="glass-panel p-4">
                 <div className="text-sm font-medium text-text-secondary mb-1">Spend (MTD)</div>
-                <div className="text-2xl font-bold text-text-primary">₹1.2M</div>
-                <div className="text-xs text-red-500 mt-2 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> +5% vs last month</div>
+                <div className="text-2xl font-bold text-text-primary">
+                  {loading ? "-" : `₹${recentPos.reduce((sum, po) => {
+                    const amt = typeof po.amount === 'string' ? parseFloat(po.amount.replace(/[^0-9.-]+/g, "")) : (po.amount || 0);
+                    return sum + amt;
+                  }, 0).toLocaleString("en-IN")}`}
+                </div>
+                <div className="text-xs text-brand-green mt-2 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Live Data</div>
               </div>
               <div className="glass-panel p-4">
                 <div className="text-sm font-medium text-text-secondary mb-1">Delayed Deliveries</div>
-                <div className="text-2xl font-bold text-orange-500">3</div>
+                <div className="text-2xl font-bold text-orange-500">{loading ? "-" : recentPos.filter(p => p.status === 'Delayed').length}</div>
                 <div className="text-xs text-text-muted mt-2">Requires attention</div>
               </div>
             </div>
@@ -177,23 +197,33 @@ function ProcurementPageContent() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-default">
-                    {RECENT_POS.map(po => (
-                      <tr key={po.id} className="hover:bg-bg-surface/50 transition-colors cursor-pointer">
-                        <td className="p-4 font-medium text-brand-green">{po.id}</td>
-                        <td className="p-4 text-text-primary">{po.supplier}</td>
-                        <td className="p-4 text-text-secondary">{po.date}</td>
-                        <td className="p-4 font-medium">{po.amount}</td>
-                        <td className="p-4">
-                          <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                            po.status === 'Delivered' ? 'bg-green-100 text-green-700 border border-green-200' :
-                            po.status === 'In Transit' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
-                            'bg-orange-100 text-orange-700 border border-orange-200'
-                          }`}>
-                            {po.status}
-                          </span>
-                        </td>
+                    {loading ? (
+                      <tr>
+                        <td colSpan={5} className="p-4 text-center text-text-muted">Loading orders...</td>
                       </tr>
-                    ))}
+                    ) : recentPos.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="p-4 text-center text-text-muted">No purchase orders found.</td>
+                      </tr>
+                    ) : (
+                      recentPos.map(po => (
+                        <tr key={po.id} className="hover:bg-bg-surface/50 transition-colors cursor-pointer">
+                          <td className="p-4 font-medium text-brand-green">{po.id}</td>
+                          <td className="p-4 text-text-primary">{po.supplier}</td>
+                          <td className="p-4 text-text-secondary">{po.date || new Date().toISOString().slice(0, 10)}</td>
+                          <td className="p-4 font-medium">{typeof po.amount === 'string' ? po.amount : `₹${(po.amount || 0).toLocaleString("en-IN")}`}</td>
+                          <td className="p-4">
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                              po.status === 'Delivered' ? 'bg-green-100 text-green-700 border border-green-200' :
+                              po.status === 'In Transit' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
+                              'bg-orange-100 text-orange-700 border border-orange-200'
+                            }`}>
+                              {po.status || 'Pending'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -211,34 +241,40 @@ function ProcurementPageContent() {
               </h3>
               
               <div className="space-y-4 relative z-10">
-                {AUTO_REORDERS.map(item => (
-                  <div key={item.id} className="border border-border-default rounded-lg p-3 bg-white hover:border-brand-green/30 transition-colors shadow-sm">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="font-medium text-text-primary">{item.product}</div>
-                      <div className="text-xs font-semibold px-1.5 py-0.5 rounded text-green-700 bg-green-100 flex items-center">
-                        {item.confidence}% Match
+                {loading ? (
+                  <div className="text-center text-text-muted py-4">Loading suggestions...</div>
+                ) : autoReorders.length === 0 ? (
+                  <div className="text-center text-text-muted py-4">No pending reorders.</div>
+                ) : (
+                  autoReorders.map(item => (
+                    <div key={item.id} className="border border-border-default rounded-lg p-3 bg-white hover:border-brand-green/30 transition-colors shadow-sm">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="font-medium text-text-primary">{item.product}</div>
+                        <div className="text-xs font-semibold px-1.5 py-0.5 rounded text-green-700 bg-green-100 flex items-center">
+                          {item.confidence || 90}% Match
+                        </div>
                       </div>
+                      <div className="text-sm text-text-secondary mb-3">
+                        Order <span className="font-medium text-text-primary">{item.suggestedQty} units</span> from {item.supplier}
+                      </div>
+                      
+                      {item.status === 'Pending' || !item.status ? (
+                        <div className="flex gap-2">
+                          <button className="flex-1 bg-brand-green text-black py-1.5 rounded text-sm font-medium hover:bg-brand-green/90 transition-colors flex items-center justify-center gap-1">
+                            <Check className="w-3 h-3" /> Approve
+                          </button>
+                          <button className="flex-1 border border-border-default bg-slate-50 py-1.5 rounded text-sm font-medium hover:bg-slate-100 transition-colors text-text-secondary">
+                            Dismiss
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-green-600 flex items-center gap-1 font-medium bg-green-50 p-2 rounded border border-green-100">
+                          <CheckCircle2 className="w-4 h-4" /> Added to PO
+                        </div>
+                      )}
                     </div>
-                    <div className="text-sm text-text-secondary mb-3">
-                      Order <span className="font-medium text-text-primary">{item.suggestedQty} units</span> from {item.supplier}
-                    </div>
-                    
-                    {item.status === 'Pending' ? (
-                      <div className="flex gap-2">
-                        <button className="flex-1 bg-brand-green text-black py-1.5 rounded text-sm font-medium hover:bg-brand-green/90 transition-colors flex items-center justify-center gap-1">
-                          <Check className="w-3 h-3" /> Approve
-                        </button>
-                        <button className="flex-1 border border-border-default bg-slate-50 py-1.5 rounded text-sm font-medium hover:bg-slate-100 transition-colors text-text-secondary">
-                          Dismiss
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="text-sm text-green-600 flex items-center gap-1 font-medium bg-green-50 p-2 rounded border border-green-100">
-                        <CheckCircle2 className="w-4 h-4" /> Added to PO
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
               
               <button className="w-full mt-4 py-2 text-sm font-medium text-brand-green hover:underline flex justify-center items-center">

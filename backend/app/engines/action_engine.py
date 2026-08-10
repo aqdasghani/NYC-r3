@@ -60,7 +60,7 @@ def _rule_based_recommendations(detection, product=None) -> list[Recommendation]
         ]
     elif "stockout" in risk or "demand" in risk:
         lead = getattr(product, "lead_time_days", 2) if product else 2
-        qty = math.ceil(float(detection.metadata.get("last_week_avg", 1)) * (lead + 1))
+        qty = math.ceil(float(getattr(detection, "metadata", {}).get("last_week_avg", 1)) * (lead + 1))
         actions = [
             ("REORDER", {"quantity": qty}, value * 0.1, f"Order {qty} units before demand outpaces supply."),
             ("TRANSFER", {"percent_units": 25}, value * 0.15, "Source units from another store temporarily."),

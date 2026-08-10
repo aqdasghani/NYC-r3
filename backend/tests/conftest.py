@@ -20,6 +20,7 @@ import tempfile
 _TEST_DIR = pathlib.Path(tempfile.mkdtemp(prefix="greenshop-tests-"))
 os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_DIR / 'test.db'}"
 os.environ["DISABLE_SCHEDULER"] = "true"
+os.environ["SEED_WITH_SYNTHETIC_DATA"] = "true"
 os.environ["OPENAI_API_KEY"] = ""  # force rule-based AI, no network in tests
 
 import pytest  # noqa: E402

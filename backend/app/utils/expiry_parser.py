@@ -34,6 +34,8 @@ def _parse_date(value: str) -> Optional[date]:
             # Accept both DD/MM/YYYY and MM/DD/YYYY, preferring DD/MM.
             if a > 12:
                 return date(c, b, a)
+            if b > 12:
+                return date(c, a, b)
             return date(c, b, a)
         if len(parts) == 2:
             month, year = (int(p) for p in parts)

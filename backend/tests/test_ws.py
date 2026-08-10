@@ -28,7 +28,7 @@ def test_ws_receives_broadcast_on_sale(client, owner_headers):
         except Exception as exc:  # noqa: BLE001
             events.append(f"ws-error: {exc}")
 
-    thread = threading.Thread(target=listener)
+    thread = threading.Thread(target=listener, daemon=True)
     thread.start()
     time.sleep(1.0)  # let the socket connect before broadcasting
     sale = client.post("/api/pos/sale", headers=owner_headers,

@@ -21,6 +21,7 @@ class Settings(BaseSettings):
 
     # Database — SQLite default, switch to PostgreSQL via full URL.
     DATABASE_URL: str = f"sqlite:///{BASE_DIR / 'greenshop.db'}"
+    SEED_WITH_SYNTHETIC_DATA: bool = False
 
     # Auth
     JWT_SECRET: str = "dev-secret-change-me-in-production"

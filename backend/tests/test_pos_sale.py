@@ -3,7 +3,7 @@ import uuid
 
 from sqlalchemy import select
 
-from app.models.database import InventoryBatch, Product
+from app.models.database import InventoryBatch, Product, Sale
 
 
 def _first_barcode(client, headers):
@@ -19,16 +19,15 @@ def test_pos_sale_returns_receipt(client, owner_headers, db):
     r = client.post("/api/pos/sale", headers=owner_headers,
                     json={"items": [{"barcode": barcode, "quantity": 2}]})
     assert r.status_code == 200, r.text
-    receipt = r.json()["receipt"]
-    assert receipt["receipt_no"].startswith("GS-")
+    receipt = r.json()["invoice"]
+    assert receipt["invoice_number"].startswith("GM-")
     assert receipt["grand_total"] > 0
-    assert receipt["lines"] and receipt["lines"][0]["qty"] == 2
+    assert receipt["items"] and receipt["items"][0]["quantity"] == 2
     # FEFO allocation picks the earliest-expiring batch and deducts from it
-    line = receipt["lines"][0]
-    product = db.scalar(select(Product).where(Product.barcode == barcode))
-    assert product is not None
-    # the response serializes batch_id as a string; bind as UUID for the Uuid column
-    sold_batch = db.scalar(select(InventoryBatch).where(InventoryBatch.id == uuid.UUID(line["batch_id"])))
+    sale = db.scalar(select(Sale).where(Sale.invoice_id == uuid.UUID(receipt["id"])))
+    assert sale is not None
+    assert sale.batch_id is not None
+    sold_batch = db.scalar(select(InventoryBatch).where(InventoryBatch.id == sale.batch_id))
     assert sold_batch is not None
 
 

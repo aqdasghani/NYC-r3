@@ -123,6 +123,47 @@ class InventoryBatch(Base):
     days_in_store: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=0)  # additive: detect_risks
 
 
+class Invoice(Base):
+    __tablename__ = "invoices"
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    invoice_number: Mapped[str] = mapped_column(sa.String(100), unique=True, nullable=False, index=True)
+    store_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("stores.id"), nullable=False)
+    cashier_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("users.id"), nullable=False)
+    customer_id: Mapped[Optional[uuid.UUID]] = mapped_column(sa.Uuid, nullable=True)
+    subtotal: Mapped[float] = mapped_column(sa.Numeric(10, 2), nullable=False)
+    total_mrp: Mapped[float] = mapped_column(sa.Numeric(10, 2), nullable=False)
+    total_discount: Mapped[float] = mapped_column(sa.Numeric(10, 2), nullable=False)
+    total_gst: Mapped[float] = mapped_column(sa.Numeric(10, 2), nullable=False)
+    grand_total: Mapped[float] = mapped_column(sa.Numeric(10, 2), nullable=False)
+    amount_paid: Mapped[float] = mapped_column(sa.Numeric(10, 2), nullable=False)
+    change_amount: Mapped[float] = mapped_column(sa.Numeric(10, 2), nullable=False)
+    payment_method: Mapped[str] = mapped_column(sa.String(50), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(sa.DateTime, nullable=False, default=utcnow)
+
+
+class InvoiceItem(Base):
+    __tablename__ = "invoice_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    invoice_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("invoices.id"), nullable=False)
+    product_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("products.id"), nullable=False)
+    product_name_snapshot: Mapped[str] = mapped_column(sa.String(255), nullable=False)
+    sku_snapshot: Mapped[Optional[str]] = mapped_column(sa.String(100), nullable=True)
+    barcode_snapshot: Mapped[Optional[str]] = mapped_column(sa.String(100), nullable=True)
+    quantity: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    unit: Mapped[str] = mapped_column(sa.String(50), nullable=False, default="Piece")
+    mrp: Mapped[float] = mapped_column(sa.Numeric(10, 2), nullable=False)
+    selling_price: Mapped[float] = mapped_column(sa.Numeric(10, 2), nullable=False)
+    discount_type: Mapped[Optional[str]] = mapped_column(sa.String(50), nullable=True)
+    discount_value: Mapped[Optional[float]] = mapped_column(sa.Numeric(10, 2), nullable=True)
+    discount_amount: Mapped[float] = mapped_column(sa.Numeric(10, 2), nullable=False, default=0.0)
+    taxable_amount: Mapped[float] = mapped_column(sa.Numeric(10, 2), nullable=False)
+    gst_rate: Mapped[float] = mapped_column(sa.Numeric(5, 2), nullable=False)
+    gst_amount: Mapped[float] = mapped_column(sa.Numeric(10, 2), nullable=False)
+    total_amount: Mapped[float] = mapped_column(sa.Numeric(10, 2), nullable=False)
+
+
 class Sale(Base):
     __tablename__ = "sales"
     __table_args__ = (
@@ -132,6 +173,7 @@ class Sale(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
     store_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("stores.id"), nullable=False)
+    invoice_id: Mapped[Optional[uuid.UUID]] = mapped_column(sa.Uuid, sa.ForeignKey("invoices.id"), nullable=True)
     product_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("products.id"), nullable=False)
     batch_id: Mapped[Optional[uuid.UUID]] = mapped_column(sa.Uuid, sa.ForeignKey("inventory_batches.id"), nullable=True)
     quantity_sold: Mapped[int] = mapped_column(sa.Integer, nullable=False)
@@ -213,6 +255,100 @@ class BarcodeCatalog(Base):
     category: Mapped[Optional[str]] = mapped_column(sa.String(100), nullable=True)
     suggested_price: Mapped[Optional[float]] = mapped_column(sa.Numeric(10, 2), nullable=True)
     image_url: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(sa.DateTime, nullable=False, default=utcnow)
+
+
+class Customer(Base):
+    __tablename__ = "customers"
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    store_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("stores.id"), nullable=False)
+    name: Mapped[str] = mapped_column(sa.String(255), nullable=False)
+    phone: Mapped[Optional[str]] = mapped_column(sa.String(20), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(sa.String(255), nullable=True)
+    loyalty_points: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(sa.DateTime, nullable=False, default=utcnow)
+
+
+class PurchaseOrder(Base):
+    __tablename__ = "purchase_orders"
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    store_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("stores.id"), nullable=False)
+    supplier_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("suppliers.id"), nullable=False)
+    status: Mapped[str] = mapped_column(sa.String(50), nullable=False, default="DRAFT")  # DRAFT/SENT/RECEIVED/CANCELLED
+    total_amount: Mapped[Optional[float]] = mapped_column(sa.Numeric(12, 2), nullable=True)
+    expected_delivery_date: Mapped[Optional[date]] = mapped_column(sa.Date, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(sa.DateTime, nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(sa.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+
+class PurchaseOrderItem(Base):
+    __tablename__ = "purchase_order_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    po_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("purchase_orders.id"), nullable=False)
+    product_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("products.id"), nullable=False)
+    quantity: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=1)
+    unit_price: Mapped[Optional[float]] = mapped_column(sa.Numeric(10, 2), nullable=True)
+    received_quantity: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=0)
+
+
+class StockTransfer(Base):
+    __tablename__ = "stock_transfers"
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    source_store_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("stores.id"), nullable=False)
+    destination_store_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("stores.id"), nullable=False)
+    status: Mapped[str] = mapped_column(sa.String(50), nullable=False, default="PENDING")  # PENDING/SHIPPED/RECEIVED/CANCELLED
+    transfer_date: Mapped[datetime] = mapped_column(sa.DateTime, nullable=False, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(sa.DateTime, nullable=False, default=utcnow)
+
+
+class StockTransferItem(Base):
+    __tablename__ = "stock_transfer_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    transfer_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("stock_transfers.id"), nullable=False)
+    product_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("products.id"), nullable=False)
+    batch_id: Mapped[Optional[uuid.UUID]] = mapped_column(sa.Uuid, sa.ForeignKey("inventory_batches.id"), nullable=True)
+    quantity: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=1)
+
+
+class Return(Base):
+    __tablename__ = "returns"
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    store_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("stores.id"), nullable=False)
+    customer_id: Mapped[Optional[uuid.UUID]] = mapped_column(sa.Uuid, sa.ForeignKey("customers.id"), nullable=True)
+    sale_id: Mapped[Optional[uuid.UUID]] = mapped_column(sa.Uuid, sa.ForeignKey("sales.id"), nullable=True)
+    total_refund: Mapped[float] = mapped_column(sa.Numeric(10, 2), nullable=False, default=0.0)
+    reason: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
+    return_date: Mapped[datetime] = mapped_column(sa.DateTime, nullable=False, default=utcnow)
+
+
+class ReturnItem(Base):
+    __tablename__ = "return_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    return_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("returns.id"), nullable=False)
+    product_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("products.id"), nullable=False)
+    batch_id: Mapped[Optional[uuid.UUID]] = mapped_column(sa.Uuid, sa.ForeignKey("inventory_batches.id"), nullable=True)
+    quantity: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=1)
+    refund_amount: Mapped[float] = mapped_column(sa.Numeric(10, 2), nullable=False, default=0.0)
+    condition: Mapped[str] = mapped_column(sa.String(50), nullable=False, default="SELLABLE")  # SELLABLE/DAMAGED/EXPIRED
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    store_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("stores.id"), nullable=False)
+    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(sa.Uuid, sa.ForeignKey("users.id"), nullable=True)
+    action: Mapped[str] = mapped_column(sa.String(255), nullable=False)
+    entity_type: Mapped[str] = mapped_column(sa.String(100), nullable=False)
+    entity_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, nullable=False)
+    details: Mapped[dict] = mapped_column(sa.JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(sa.DateTime, nullable=False, default=utcnow)
 
 
