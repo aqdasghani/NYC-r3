@@ -526,7 +526,46 @@ export async function getProducts(search?: string): Promise<ProductOut[]> {
 }
 
 export async function getProductByBarcode(code: string): Promise<ProductOut> {
-  return apiFetch<ProductOut>(`/api/inventory/barcode/${code}`);
+  const cleanCode = code.trim();
+  try {
+    return await apiFetch<ProductOut>(`/api/inventory/barcode/${cleanCode}`);
+  } catch (err) {
+    // Fallback 1: Search local store catalogue
+    const products = await getProducts(cleanCode).catch(() => []);
+    const match = products.find(
+      (p) => p.barcode === cleanCode || p.sku === cleanCode || p.barcode?.includes(cleanCode)
+    );
+    if (match) return match;
+
+    // Fallback 2: Test FMCG barcodes dictionary
+    const MOCK_BARCODES: Record<string, { name: string; category: string; price: number; sell: number }> = {
+      "8901030940387": { name: "Amul Pasteurised Butter 500g", category: "Dairy", price: 240, sell: 275 },
+      "8901058852310": { name: "Britannia 100% Whole Wheat Bread 400g", category: "Bakery", price: 35, sell: 45 },
+      "8901063013140": { name: "Mother Dairy Toned Milk 1L", category: "Dairy", price: 60, sell: 68 },
+      "8901030000000": { name: "Parle-G Gold Biscuits 100g", category: "Snacks", price: 10, sell: 12 },
+    };
+
+    if (MOCK_BARCODES[cleanCode]) {
+      const mockInfo = MOCK_BARCODES[cleanCode];
+      return {
+        id: "prod-bc-" + cleanCode,
+        store_id: "store-1",
+        name: mockInfo.name,
+        sku: "BC-" + cleanCode.slice(-6),
+        barcode: cleanCode,
+        category: mockInfo.category,
+        purchase_price: mockInfo.price,
+        selling_price: mockInfo.sell,
+        gst_rate: 0,
+        supplier_id: null,
+        lead_time_days: 2,
+        created_at: new Date().toISOString(),
+        is_new: true,
+      };
+    }
+
+    throw new Error(`Product not found for barcode ${cleanCode}`);
+  }
 }
 
 export async function createProduct(payload: {
@@ -534,11 +573,55 @@ export async function createProduct(payload: {
   barcode?: string;
   category?: string;
 }): Promise<ProductOut> {
-  return apiFetch<ProductOut>("/api/inventory/products", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  return liveOr(
+    () => apiFetch<ProductOut>("/api/inventory/products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+    () => ({
+      id: "mock-prod-" + Math.random().toString(36).substring(7),
+      store_id: "store-1",
+      name: payload.name,
+      barcode: payload.barcode || null,
+      category: payload.category || "General",
+      purchase_price: 0,
+      selling_price: 0,
+      sku: "MOCK-SKU",
+      gst_rate: 0,
+      supplier_id: null,
+      lead_time_days: 2,
+      created_at: new Date().toISOString(),
+      is_new: true,
+    })
+  );
+}
+
+export async function updateProduct(
+  productId: string,
+  payload: { name?: string; barcode?: string; category?: string; purchase_price?: number; selling_price?: number }
+): Promise<ProductOut> {
+  return liveOr(
+    () => apiFetch<ProductOut>(`/api/inventory/products/${productId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+    () => ({
+      id: productId,
+      store_id: "store-1",
+      name: payload.name || "Product",
+      barcode: payload.barcode || null,
+      category: payload.category || "General",
+      purchase_price: payload.purchase_price || 0,
+      selling_price: payload.selling_price || 0,
+      sku: "SKU-UPDATE",
+      gst_rate: 0,
+      supplier_id: null,
+      lead_time_days: 2,
+      created_at: new Date().toISOString(),
+    })
+  );
 }
 
 /** All inventory batches (used by POS to compute per-product stock). */
@@ -598,11 +681,34 @@ export async function getTransactions(): Promise<Transaction[]> {
 export async function postSale(
   items: Array<{ product_id?: string; barcode?: string; quantity: number }>
 ): Promise<PosSaleResponse> {
-  return apiFetch<PosSaleResponse>("/api/pos/sale", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ items }),
-  });
+  return liveOr(
+    () => apiFetch<PosSaleResponse>("/api/pos/sale", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items }),
+    }),
+    () => ({
+      receipt: {
+        receipt_no: "MOCK-" + Math.floor(Math.random() * 10000),
+        store_id: "store-1",
+        timestamp: new Date().toISOString(),
+        lines: items.map(i => ({ 
+          product_id: i.product_id || "mock-1", 
+          name: "Mock Product", 
+          batch_id: "batch-1",
+          batch_number: "B001",
+          qty: i.quantity, 
+          unit_price: 100, 
+          gst_rate: 0,
+          gst_amount: 0,
+          line_total: 100 * i.quantity 
+        })),
+        subtotal: items.reduce((s, i) => s + 100 * i.quantity, 0),
+        gst_total: 0,
+        grand_total: items.reduce((s, i) => s + 100 * i.quantity, 0)
+      }
+    })
+  );
 }
 
 // ================================================================= actions
@@ -625,30 +731,53 @@ export async function executeAction(
   new_status: string;
   intervention: string;
 }> {
-  return apiFetch("/api/actions/" + actionId + "/execute", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ selected }),
-  });
+  return liveOr(
+    () => apiFetch("/api/actions/" + actionId + "/execute", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ selected }),
+    }),
+    () => ({ waste_prevented: 100, green_score_delta: 1, items_cleared: 10, new_status: "EXECUTED", intervention: "Mock executed" })
+  );
 }
 
 export async function dismissAction(actionId: string): Promise<void> {
-  await apiFetch("/api/actions/" + actionId + "/dismiss", { method: "POST" });
+  return liveOr(
+    async () => {
+      await apiFetch("/api/actions/" + actionId + "/dismiss", { method: "POST" });
+    },
+    () => Promise.resolve()
+  );
 }
 
 export async function generateActions(): Promise<{
   risks_detected: number;
   recommendations_created: number;
 }> {
-  return apiFetch("/api/actions/generate", { method: "POST" });
+  return liveOr(
+    () => apiFetch("/api/actions/generate", { method: "POST" }),
+    () => ({ risks_detected: 0, recommendations_created: 0 })
+  );
 }
 
 // ============================================================== receiving
 
 export async function scanInvoice(file: File): Promise<ScanInvoiceResponse> {
-  const form = new FormData();
-  form.append("file", file);
-  return await apiUpload<ScanInvoiceResponse>("/api/receiving/scan-invoice", form);
+  return liveOr(
+    () => {
+      const form = new FormData();
+      form.append("file", file);
+      return apiUpload<ScanInvoiceResponse>("/api/receiving/scan-invoice", form);
+    },
+    () => ({
+      source: "mock",
+      raw_text: "Mock Invoice Text",
+      extracted_items: [
+        { line_text: "Mock Item 1", product_name: "Mock Scanned Item 1", quantity: 20, price: 45, confidence: 0.95, matched_product_id: "mock-prod-1", batch_number: "B101", expiry_date: "2026-09-01" },
+        { line_text: "Mock Item 2", product_name: "Mock Scanned Item 2", quantity: 15, price: 120, confidence: 0.88, matched_product_id: "mock-prod-2", batch_number: "B102", expiry_date: "2026-09-15" }
+      ]
+    })
+  );
 }
 
 export async function confirmReceipt(
@@ -660,11 +789,18 @@ export async function confirmReceipt(
     batch_number?: string;
   }>
 ): Promise<ConfirmReceiptResponse> {
-  return await apiFetch<ConfirmReceiptResponse>("/api/receiving/confirm", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ items }),
-  });
+  return liveOr(
+    () => apiFetch<ConfirmReceiptResponse>("/api/receiving/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items }),
+    }),
+    () => ({
+      created_batch_ids: items.map((_, i) => `mock-batch-${i}`),
+      detection_summary: { risks_detected: 0, recommendations_created: 0 },
+      alerts_triggered: 0
+    })
+  );
 }
 
 // ============================================================== suppliers
@@ -673,6 +809,58 @@ export async function getSuppliers(): Promise<SupplierOut[]> {
   return liveOr(() => apiFetch<SupplierOut[]>("/api/suppliers"), () => []);
 }
 
+// ============================================================== monthly reports
+
+export interface MonthlyReportSummary {
+  month_name: string;
+  total_sales: number;
+  total_transactions: number;
+  waste_prevented_value: number;
+  actual_waste_value: number;
+  avg_green_score: number;
+  top_category: string;
+  top_selling_product: string;
+  generated_at: string;
+}
+
+export async function getMonthlyReport(monthYear?: string): Promise<MonthlyReportSummary> {
+  const q = monthYear ? `?month=${monthYear}` : "";
+  return liveOr(
+    () => apiFetch<MonthlyReportSummary>(`/api/analytics/monthly-report${q}`),
+    () => {
+      const now = new Date();
+      return {
+        month_name: now.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+        total_sales: 145800.00,
+        total_transactions: 342,
+        waste_prevented_value: 18450.00,
+        actual_waste_value: 1200.00,
+        avg_green_score: 87.5,
+        top_category: "Dairy & Milk",
+        top_selling_product: "Amul Taaza Toned Milk 1L",
+        generated_at: new Date().toISOString()
+      };
+    }
+  );
+}
+
+export async function exportMonthlyReportCSV(monthYear?: string): Promise<string> {
+  const report = await getMonthlyReport(monthYear);
+  const csvLines = [
+    "Metric,Value",
+    `Month,${report.month_name}`,
+    `Total Sales Revenue (INR),${report.total_sales}`,
+    `Total Transactions,${report.total_transactions}`,
+    `Waste Prevented Value (INR),${report.waste_prevented_value}`,
+    `Actual Waste Value (INR),${report.actual_waste_value}`,
+    `Average Green Score,${report.avg_green_score}`,
+    `Top Category,${report.top_category}`,
+    `Top Selling Product,"${report.top_selling_product}"`
+  ];
+  return csvLines.join("\n");
+}
+
 // ================================================================ exports
 
 export type { ExtractedItem };
+

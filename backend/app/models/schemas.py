@@ -473,3 +473,23 @@ class WhatsAppStatusOut(BaseModel):
     configured: bool
     verify_token: str
     phone_id: str
+
+
+# ---------------------------------------------------------------- reports
+
+class MonthlyReportOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    store_id: uuid.UUID
+    month_year: str
+    total_sales: float
+    total_transactions: int
+    waste_prevented_value: float
+    actual_waste_value: float
+    avg_green_score: float
+    top_category: Optional[str] = None
+    top_selling_product: Optional[str] = None
+    summary_json: dict = {}
+    created_at: datetime
+

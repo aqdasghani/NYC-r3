@@ -87,3 +87,41 @@ def briefing(user: User = Depends(get_current_user), db=Depends(get_db)):
     sid = store(user); pending = db.scalars(select(AIRecommendation).where(AIRecommendation.store_id == sid, AIRecommendation.status == "PENDING")).all()
     waste = waste_prevented_total(db, sid)
     return DailyBrief(important_actions=len(pending), est_impact=round(sum(float(p.value_at_risk or 0) for p in pending), 2), sections=[{"title": "Urgent", "count": sum(1 for p in pending if "expiry" in p.risk_type.lower())}, {"title": "Action", "count": len(pending)}, {"title": "Procurement", "count": sum(1 for p in pending if "stockout" in p.risk_type.lower())}, {"title": "Sustainability", "count": round(waste, 2)}])
+
+
+@router.get("/monthly-report")
+def monthly_report(month: str = "", user: User = Depends(get_current_user), db=Depends(get_db)):
+    from fastapi.responses import Response
+    from ..engines.report_engine import generate_monthly_report
+    sid = store(user)
+    if not month:
+        month = date.today().strftime("%Y-%m")
+    return generate_monthly_report(db, sid, month)
+
+
+@router.get("/monthly-report/export-csv")
+def export_monthly_report_csv(month: str = "", user: User = Depends(get_current_user), db=Depends(get_db)):
+    from fastapi.responses import Response
+    from ..engines.report_engine import generate_monthly_report
+    sid = store(user)
+    if not month:
+        month = date.today().strftime("%Y-%m")
+    report = generate_monthly_report(db, sid, month)
+    csv_lines = [
+        "Metric,Value",
+        f"Month,{report['month_name']}",
+        f"Total Sales Revenue (INR),{report['total_sales']}",
+        f"Total Transactions,{report['total_transactions']}",
+        f"Waste Prevented Value (INR),{report['waste_prevented_value']}",
+        f"Actual Waste Value (INR),{report['actual_waste_value']}",
+        f"Average Green Score,{report['avg_green_score']}",
+        f"Top Category,{report['top_category']}",
+        f"Top Selling Product,\"{report['top_selling_product']}\"",
+    ]
+    csv_data = "\n".join(csv_lines)
+    return Response(
+        content=csv_data,
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=Monthly_Report_{month}.csv"}
+    )
+
