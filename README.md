@@ -7,11 +7,11 @@
   </p>
 
   <p>
-    <a href="#features"><strong>Features</strong></a> ·
-    <a href="#tech-stack"><strong>Tech Stack</strong></a> ·
-    <a href="#getting-started"><strong>Getting Started</strong></a> ·
-    <a href="#project-structure"><strong>Project Structure</strong></a>
-  </p>
+<a href="https://greenshop-ai.vercel.app/"><strong>🚀 Live Demo</strong></a> ·
+<a href="#features"><strong>Features</strong></a> ·
+<a href="#tech-stack"><strong>Tech Stack</strong></a> ·
+<a href="#getting-started"><strong>Getting Started</strong></a> ·
+<a href="#project-structure"><strong>Project Structure</strong></a>
 
   <p>
     <img src="https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js" alt="Next.js" />
