@@ -3,64 +3,41 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Activity, Mail, Lock, User, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Activity, Lock, User, ArrowRight, Store } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { register, loginWithGoogle } from "@/lib/api-client";
-import GoogleAuthButton from "@/components/GoogleAuthButton";
 
 export default function SignupPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [step, setStep] = useState(1);
 
   // Form state
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [storeName, setStoreName] = useState("");
-  const [storeType, setStoreType] = useState("Supermarket");
+  const [password, setPassword] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-
-    if (step === 1) {
-      if (password.length < 8) {
-        setError("Password must be at least 8 characters long");
-        return;
-      }
-      setStep(2);
-      return;
-    }
-
     setLoading(true);
-    try {
-      await register({
-        name,
-        email,
-        password,
-        store_name: storeName,
-        store_type: storeType
-      });
-      router.push("/dashboard");
-    } catch (err: any) {
-      // Bypass auth logic if the backend is unreachable or failing
-      const authObj = {
-        access_token: "mock-token-" + Date.now(),
-        user: {
-          id: "mock-id",
-          email: email,
-          name: name || "Demo User",
-          role: "OWNER",
-          store_id: "mock-store",
-          store_name: storeName || "My Store",
-          is_active: true
-        }
-      };
+
+    // Bypass auth logic entirely
+    const authObj = {
+      access_token: "mock-token-" + Date.now(),
+      user: {
+        id: "mock-id",
+        email: "store@greenshop.ai",
+        name: name || "Demo User",
+        role: "OWNER",
+        store_id: "mock-store",
+        store_name: storeName || "My Store",
+        is_active: true
+      }
+    };
+    
+    // Slight delay for UX
+    setTimeout(() => {
       localStorage.setItem("Green Quant_auth", JSON.stringify(authObj));
       router.push("/dashboard");
-    }
+    }, 500);
   };
 
   return (
@@ -89,188 +66,80 @@ export default function SignupPage() {
           animate={{ opacity: 1, y: 0 }}
           className="glass-panel p-8 sm:p-10"
         >
-          {error && (
-            <div className="mb-6 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 text-sm flex items-start gap-3">
-              <svg className="w-5 h-5 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-              </svg>
-              <span>{error}</span>
-            </div>
-          )}
           <form className="space-y-6" onSubmit={handleSubmit}>
-            {step === 1 ? (
-              <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-                <div>
-                  <label htmlFor="name" className="block text-sm font-semibold text-text-primary mb-1.5">
-                    Full Name
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <User className="h-5 w-5 text-text-muted" />
-                    </div>
-                    <input
-                      id="name"
-                      name="name"
-                      type="text"
-                      required
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="block w-full pl-10 pr-3 py-2.5 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green transition-all"
-                      placeholder="John Doe"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="email" className="block text-sm font-semibold text-text-primary mb-1.5">
-                    Email address
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Mail className="h-5 w-5 text-text-muted" />
-                    </div>
-                    <input
-                      id="email"
-                      name="email"
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="block w-full pl-10 pr-3 py-2.5 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green transition-all"
-                      placeholder="you@example.com"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="password" className="block text-sm font-semibold text-text-primary mb-1.5">
-                    Password
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Lock className="h-5 w-5 text-text-muted" />
-                    </div>
-                    <input
-                      id="password"
-                      name="password"
-                      type="password"
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="block w-full pl-10 pr-3 py-2.5 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green transition-all"
-                      placeholder="••••••••"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <button
-                    type="submit"
-                    className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-brand-green hover:bg-brand-green-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-green transition-all"
-                  >
-                    Continue <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-                <div>
-                  <label htmlFor="storeName" className="block text-sm font-semibold text-text-primary mb-1.5">
-                    Store Name
-                  </label>
-                  <div className="relative">
-                    <input
-                      id="storeName"
-                      name="storeName"
-                      type="text"
-                      required
-                      value={storeName}
-                      onChange={(e) => setStoreName(e.target.value)}
-                      className="block w-full px-3 py-2.5 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green transition-all"
-                      placeholder="My Awesome Mart"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="storeType" className="block text-sm font-semibold text-text-primary mb-1.5">
-                    Store Type
-                  </label>
-                  <select
-                    id="storeType"
-                    name="storeType"
-                    value={storeType}
-                    onChange={(e) => setStoreType(e.target.value)}
-                    className="block w-full px-3 py-2.5 border border-border-default rounded-lg bg-bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green transition-all"
-                  >
-                    <option>Supermarket</option>
-                    <option>Pharmacy</option>
-                    <option>Convenience Store</option>
-                    <option>Other</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-2 text-sm text-text-secondary">
-                  <CheckCircle2 className="w-5 h-5 text-brand-green" />
-                  14-day free trial, no credit card required
-                </div>
-
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setStep(1)}
-                    className="flex-1 flex justify-center items-center py-3 px-4 border border-border-default rounded-lg text-sm font-bold text-text-primary bg-bg-surface hover:bg-slate-50 transition-all"
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="flex-[2] flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-brand-green hover:bg-brand-green-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-green transition-all disabled:opacity-70"
-                  >
-                    {loading ? "Setting up..." : "Create Account"}
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </form>
-          
-          {step === 1 && (
-            <div className="mt-8">
+            <div>
+              <label htmlFor="name" className="block text-sm font-semibold text-text-primary mb-1.5">
+                Full Name
+              </label>
               <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-border-default" />
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <User className="h-5 w-5 text-text-muted" />
                 </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white text-text-muted">Or continue with</span>
-                </div>
-              </div>
-
-              <div className="mt-6 flex flex-col gap-3">
-                <GoogleAuthButton
-                  text="signup_with"
-                  onSuccess={async (credential) => {
-                    try {
-                      setError("");
-                      await loginWithGoogle(credential);
-                      router.push("/dashboard");
-                    } catch (err: any) {
-                      setError(err.message || "Google signup failed");
-                    }
-                  }}
-                  onError={() => setError("Google Signup Failed")}
+                <input
+                  id="name"
+                  name="name"
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="block w-full pl-10 pr-3 py-2.5 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green transition-all"
+                  placeholder="John Doe"
                 />
-                <button type="button" className="w-full inline-flex justify-center py-2.5 px-4 border border-border-default rounded-lg shadow-sm bg-white text-sm font-medium text-text-secondary hover:bg-slate-50 transition-colors">
-                  <span className="sr-only">Sign in with Apple</span>
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 0C4.477 0 0 4.477 0 10c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V10h2.54V7.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V10h2.773l-.443 2.89h-2.33v6.988C16.343 19.128 20 14.991 20 10c0-5.523-4.477-10-10-10z" clipRule="evenodd" />
-                  </svg>
-                </button>
               </div>
             </div>
-          )}
+
+            <div>
+              <label htmlFor="storeName" className="block text-sm font-semibold text-text-primary mb-1.5">
+                Store Name
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Store className="h-5 w-5 text-text-muted" />
+                </div>
+                <input
+                  id="storeName"
+                  name="storeName"
+                  type="text"
+                  required
+                  value={storeName}
+                  onChange={(e) => setStoreName(e.target.value)}
+                  className="block w-full pl-10 pr-3 py-2.5 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green transition-all"
+                  placeholder="My Awesome Mart"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="password" className="block text-sm font-semibold text-text-primary mb-1.5">
+                Password
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Lock className="h-5 w-5 text-text-muted" />
+                </div>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="block w-full pl-10 pr-3 py-2.5 border border-border-default rounded-lg bg-bg-surface text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-brand-green/50 focus:border-brand-green transition-all"
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
+
+            <div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-brand-green hover:bg-brand-green-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-green transition-all disabled:opacity-70"
+              >
+                {loading ? "Creating..." : "Create Account"} <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </form>
         </motion.div>
       </div>
     </div>
